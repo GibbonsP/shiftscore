@@ -1,0 +1,35 @@
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.log
+artifact_shift_score_final.html
+# fully regenerable from the DB via `python3 main.py report` — with
+# player/team pages this is now 1000+ files, ~17MB, not worth tracking
+report/
+# regenerable via export_team_data.py / export_artifact_data.py
+artifact_data/
+build/
+live_out/
+publish/
+images_cache/
+
+scratch/*.db
+scratch/*.json
+scratch/*.log
+external/
+scratch/*.pkl
+scratch/*.joblib
+scratch/*.bak
+site/
+state.tar.zst
+update_state.json
+
+# internal reference with the Game Score formulas and weights (never publish)
+INTERNAL_FORMULAS.md
+
+# private: the scoring constants and everything that spells them out (the repository is public)
+private/
+scratch/
+METHODOLOGY.md
+models/predicted_value_weights.json

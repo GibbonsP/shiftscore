@@ -1,0 +1,58 @@
+name: Update site
+
+# Ingest finished games, rebuild the site and deploy it to Cloudflare Pages. Runs every two hours (UTC) and on demand.
+# Setup steps are in DEPLOY.md.
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: site-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      LIVE_URL: ${{ vars.LIVE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt boto3
+
+      - name: Restore state (database and last build)
+        run: python ci/state.py pull
+
+      - name: Ingest finished games and rebuild
+        id: update
+        run: python ci/run_update.py
+
+      - name: Assemble the site
+        run: python build_site.py
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main --commit-dirty=true
+
+      - name: Save state (only when new games were ingested)
+        if: steps.update.outputs.updated == 'true'
+        run: python ci/state.py push
