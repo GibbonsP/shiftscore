@@ -31,14 +31,13 @@ ALL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 # DANGER BANDS (October 2026). A "chance" is a shot on goal, so its danger is the probability that a shot ON GOAL becomes
 # a goal, P(goal | shot on goal), from a second gradient-boosted model (danger_model.joblib) trained on shots on goal only
 # with the same inputs as the xG model. (xG is P(goal | unblocked attempt), which includes the chance of missing the net,
-# so it understates how dangerous a shot that did reach the goalie was.) Cutoffs: low under 9%, medium 9-16%, high 16%+.
-# Clear Sight Analytics defines low as 8.99% or less and high as 20%+ by the historical average of each hand-tagged
-# shot TYPE (passes, screens, rush); the NHL play-by-play has none of those tags, so a single shot's probability here is
-# less sharp than their type average. Fitting the high cutoff against three Clear Sight reports (two games and Flyers'
-# first six of 2026-27) put it at 16%: that reproduces their high / mid / low counts (for example Flyers against 61 / 41 /
-# 114 here vs 57 / 42 / 110 theirs), where a literal 20% gave 32 / 70 / 114. See METHODOLOGY.md, "Shot danger".
-LOW_DANGER_MAX = 0.09
-MEDIUM_DANGER_MAX = 0.16
+# so it understates how dangerous a shot that did reach the goalie was.) Cutoffs: low under 7%, medium 7-14%, high 14%+.
+# Clear Sight Analytics tags chances by hand (screens, passes, deflections, rush) and prices each type at its historical average; the NHL
+# play-by-play has none of those tags, so a single shot's probability here is less sharp than their type average. Cutoffs were first fitted
+# to three Clear Sight reports (9% / 16%), then refitted on the first 26 games of their 2025-26 Rangers season sheet (7% / 14%), which cut
+# the error in chances per band on the later games (see METHODOLOGY.md, "Clear Sight's 2025-26 Rangers season report against ours").
+LOW_DANGER_MAX = 0.07
+MEDIUM_DANGER_MAX = 0.14
 DANGER_MODEL_PATH = "models/danger_model.joblib"
 _danger_pipeline = None
 

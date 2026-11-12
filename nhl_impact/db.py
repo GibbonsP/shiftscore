@@ -178,7 +178,9 @@ def connect(path: str = "nhl_impact.db") -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     # lightweight self-migration: CREATE TABLE IF NOT EXISTS won't add a
     # column to a table created before that column existed
-    migrations = [
+    band_cols = [f"{b}{m}{s}" for b in ("hd", "md", "ld") for m in ("g", "xg") for s in ("f", "a")]   # hdgf hdga hdxgf hdxga ...
+    migrations = [f"ALTER TABLE player_game_stats ADD COLUMN {c}_all {'INTEGER' if 'xg' not in c else 'REAL'} DEFAULT 0" for c in band_cols] + [
+        f"ALTER TABLE unit_game_stats ADD COLUMN {c} {'INTEGER' if 'xg' not in c else 'REAL'} DEFAULT 0" for c in band_cols] + [
         "ALTER TABLE players ADD COLUMN shoots TEXT",
         "ALTER TABLE events ADD COLUMN home_defending_side TEXT",
         "ALTER TABLE player_game_stats ADD COLUMN ixg REAL DEFAULT 0",

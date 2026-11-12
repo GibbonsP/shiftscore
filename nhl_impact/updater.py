@@ -99,7 +99,7 @@ def due_games(conn, state: dict, now: datetime) -> list[tuple[int, str]]:
 
 
 def process_game(conn, game_id: int, pipeline, factors: dict) -> None:
-    ingest.ingest_game(conn, game_id)
+    ingest.ingest_game(conn, game_id, require_complete=True)
     ingest.compute_extra_stats(conn, game_id)
     units.compute_game_units(conn, game_id)
     xg_stats.compute_game_xg(conn, game_id, pipeline, factors)

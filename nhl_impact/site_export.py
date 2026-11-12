@@ -150,12 +150,15 @@ def _player_summary_and_log(conn, player_id, home_by_game):
                   SUM(giveaways), SUM(pim), SUM(toi_sec), SUM(oz_starts), SUM(dz_starts), SUM(nz_starts), SUM(fly_starts),
                   SUM(cf_all), SUM(ca_all), SUM(xgf_all), SUM(xga_all), SUM(hdcf_all), SUM(hdca_all),
                   SUM(faceoff_wins), SUM(faceoff_losses), SUM(penalties_drawn), SUM(penalties_taken), SUM(blocks),
-                  SUM(mdcf_all), SUM(mdca_all), SUM(ldcf_all), SUM(ldca_all)
+                  SUM(mdcf_all), SUM(mdca_all), SUM(ldcf_all), SUM(ldca_all),
+                  SUM(hdgf_all), SUM(hdga_all), SUM(mdgf_all), SUM(mdga_all), SUM(ldgf_all), SUM(ldga_all),
+                  SUM(hdxgf_all), SUM(hdxga_all), SUM(mdxgf_all), SUM(mdxga_all), SUM(ldxgf_all), SUM(ldxga_all)
            FROM player_game_stats WHERE player_id = ?""",
         (player_id,),
     ).fetchone()
     (gp, goals, assists, shots, avg_raw, total_ixg, hits, tk, gv, pim, toi, oz, dz, nz, fly,
-     cf, ca, xgf, xga, hdcf, hdca, fow, fol, pd, pt, blk, mdcf, mdca, ldcf, ldca) = (v or 0 for v in totals)
+     cf, ca, xgf, xga, hdcf, hdca, fow, fol, pd, pt, blk, mdcf, mdca, ldcf, ldca,
+     hdgf, hdga, mdgf, mdga, ldgf, ldga, hdxgf, hdxga, mdxgf, mdxga, ldxgf, ldxga) = (v or 0 for v in totals)
     avg_adj = (
         conn.execute("SELECT AVG(adjusted_impact) FROM player_game_impact WHERE player_id = ?", (player_id,)).fetchone()[0]
         or 0
@@ -168,6 +171,9 @@ def _player_summary_and_log(conn, player_id, home_by_game):
         "cf": int(cf), "ca": int(ca), "xgf": round(xgf, 1), "xga": round(xga, 1), "hdcf": int(hdcf), "hdca": int(hdca),
         "fow": int(fow), "fol": int(fol), "pd": int(pd), "pt": int(pt), "blk": int(blk),
         "mdcf": int(mdcf), "mdca": int(mdca), "ldcf": int(ldcf), "ldca": int(ldca),
+        # goals and expected goals on the ice by danger band, for and against (the shot danger card shows them under the counts)
+        "hdgf": int(hdgf), "hdga": int(hdga), "mdgf": int(mdgf), "mdga": int(mdga), "ldgf": int(ldgf), "ldga": int(ldga),
+        "hdxgf": round(hdxgf, 2), "hdxga": round(hdxga, 2), "mdxgf": round(mdxgf, 2), "mdxga": round(mdxga, 2), "ldxgf": round(ldxgf, 2), "ldxga": round(ldxga, 2),
     }
     log = rows(
         conn,

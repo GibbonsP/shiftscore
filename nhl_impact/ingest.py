@@ -42,13 +42,16 @@ def retally_goals_shots(conn, game_id: int) -> None:
     conn.commit()
 
 
-def ingest_game(conn, game_id: int) -> None:
+def ingest_game(conn, game_id: int, require_complete: bool = False) -> None:
+    pbp = api.get_play_by_play(game_id)
+    if require_complete and not any(p.get("typeDescKey") == "game-end" for p in pbp.get("plays", [])):
+        # the NHL sometimes serves a finished game's play-by-play before it is complete (a game stored that way shows 0-0 with no goals);
+        # refuse before touching the database so the game stays "new" and is fetched again on the next pass
+        raise ValueError(f"play-by-play for game {game_id} is not complete yet (no game-end event)")
     # delete-before-insert makes re-running the backfill on an already-ingested
     # game safe instead of duplicating shift/event rows
     conn.execute("DELETE FROM shifts WHERE game_id = ?", (game_id,))
     conn.execute("DELETE FROM events WHERE game_id = ?", (game_id,))
-
-    pbp = api.get_play_by_play(game_id)
 
     conn.execute(
         """INSERT OR REPLACE INTO games

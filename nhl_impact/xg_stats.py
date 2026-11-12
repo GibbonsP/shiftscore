@@ -9,6 +9,8 @@ from .xg_model import danger_bucket, predict_danger, predict_xg
 
 DANGER_FOR_COLS = {"high": "hdcf", "medium": "mdcf", "low": "ldcf"}
 DANGER_AGAINST_COLS = {"high": "hdca", "medium": "mdca", "low": "ldca"}
+BAND_PREFIX = {"high": "hd", "medium": "md", "low": "ld"}
+BAND_COLS = [f"{b}{m}{s}" for b in ("hd", "md", "ld") for m in ("g", "xg") for s in ("f", "a")]   # goals and xG by danger band, for and against
 
 
 def compute_game_xg(conn, game_id: int, pipeline, score_factors: dict) -> None:
@@ -22,9 +24,12 @@ def compute_game_xg(conn, game_id: int, pipeline, score_factors: dict) -> None:
     shot_rows = extract_game_shot_rows(conn, game_id)
     if not shot_rows:
         return
-    xg_values = predict_xg(pipeline, shot_rows)
-    for row, xg, dp in zip(shot_rows, xg_values, predict_danger(shot_rows)):
-        row["xg"] = xg
+    # Expected goals are counted on SHOTS ON GOAL with the goalie in net, each worth the chance a shot on goal becomes a goal (the danger
+    # model); misses, blocked shots and empty-net attempts add nothing. (Until November 2026 this was the attempt-level xG of every
+    # unblocked attempt; see METHODOLOGY.md, "One xG definition across the site".) `pipeline` (the attempt model) is no longer needed here.
+    for row, dp in zip(shot_rows, predict_danger(shot_rows)):
+        chance = bool(row["on_goal"]) and row.get("opp_goalie") != 0
+        row["xg"] = float(dp) if chance else 0.0
         row["danger"] = danger_bucket(dp)
 
     positions = dict(conn.execute("SELECT player_id, position FROM players").fetchall())
@@ -57,6 +62,8 @@ def compute_game_xg(conn, game_id: int, pipeline, score_factors: dict) -> None:
         xg = row["xg"]
         danger = row["danger"]
         state = row["strength_state"]
+        goal = int(bool(row.get("is_goal")))
+        bp = BAND_PREFIX[danger]
 
         player_acc[shooter_id]["ixg"] += xg
         if row["is_rebound"]:
@@ -81,6 +88,8 @@ def compute_game_xg(conn, game_id: int, pipeline, score_factors: dict) -> None:
             player_acc[pid]["xgf_all"] += xg
             if chance:
                 player_acc[pid][f"{DANGER_FOR_COLS[danger]}_all"] += 1
+                player_acc[pid][f"{bp}gf_all"] += goal       # goals and expected goals by band (a shot on goal's xG is its chance of scoring)
+                player_acc[pid][f"{bp}xgf_all"] += xg
             if is_5v5:
                 player_acc[pid]["xgf_5v5"] += xg
                 if chance:
@@ -89,6 +98,8 @@ def compute_game_xg(conn, game_id: int, pipeline, score_factors: dict) -> None:
             player_acc[pid]["xga_all"] += xg
             if chance:
                 player_acc[pid][f"{DANGER_AGAINST_COLS[danger]}_all"] += 1
+                player_acc[pid][f"{bp}ga_all"] += goal
+                player_acc[pid][f"{bp}xga_all"] += xg
             if is_5v5:
                 player_acc[pid]["xga_5v5"] += xg
                 if chance:
@@ -102,12 +113,12 @@ def compute_game_xg(conn, game_id: int, pipeline, score_factors: dict) -> None:
         for unit_type, player_ids in team_units(on_ice.get(shooter_team, set()), positions, state):
             add_unit(
                 shooter_team, unit_type, player_ids, row["period"],
-                xgf=xg, xgf_adjusted=xg_for_adj, **({DANGER_FOR_COLS[danger]: 1} if chance else {}),
+                xgf=xg, xgf_adjusted=xg_for_adj, **({DANGER_FOR_COLS[danger]: 1, f"{bp}gf": goal, f"{bp}xgf": xg} if chance else {}),
             )
         for unit_type, player_ids in team_units(on_ice.get(defending_team, set()), positions, defender_state):
             add_unit(
                 defending_team, unit_type, player_ids, row["period"],
-                xga=xg, xga_adjusted=xg_against_adj, **({DANGER_AGAINST_COLS[danger]: 1} if chance else {}),
+                xga=xg, xga_adjusted=xg_against_adj, **({DANGER_AGAINST_COLS[danger]: 1, f"{bp}ga": goal, f"{bp}xga": xg} if chance else {}),
             )
 
     _apply_player_stats(conn, game_id, player_acc, has_shifts=bool(shift_rows))
@@ -147,7 +158,8 @@ def _apply_player_stats(conn, game_id: int, player_acc: dict, has_shifts: bool =
                xgf_all = ?, xga_all = ?,
                hdcf_all = ?, hdca_all = ?, mdcf_all = ?, mdca_all = ?, ldcf_all = ?, ldca_all = ?,
                ixg_rebound = ?, rebounds_created = ?, ixg_adjusted = ?,
-               raw_game_score = ?
+               raw_game_score = ?,
+               """ + ", ".join(f"{c}_all = ?" for c in BAND_COLS) + """
                WHERE game_id = ? AND player_id = ?""",
             (
                 stats.get("ixg", 0),
@@ -171,6 +183,7 @@ def _apply_player_stats(conn, game_id: int, player_acc: dict, has_shifts: bool =
                 int(stats.get("rebounds_created", 0)),
                 stats.get("ixg_adjusted", 0),
                 new_score,
+                *[(int(stats.get(f"{c}_all", 0)) if "xg" not in c else stats.get(f"{c}_all", 0)) for c in BAND_COLS],
                 game_id,
                 player_id,
             ),
@@ -215,7 +228,8 @@ def _apply_unit_stats(conn, game_id: int, unit_acc: dict) -> None:
             """UPDATE unit_game_stats SET
                xgf = ?, xga = ?, hdcf = ?, hdca = ?, mdcf = ?, mdca = ?, ldcf = ?, ldca = ?,
                xgf_adjusted = ?, xga_adjusted = ?,
-               unit_score = ?
+               unit_score = ?,
+               """ + ", ".join(f"{c} = ?" for c in BAND_COLS) + """
                WHERE game_id = ? AND team_id = ? AND unit_type = ? AND player_ids = ?""",
             (
                 stats.get("xgf", 0),
@@ -229,6 +243,7 @@ def _apply_unit_stats(conn, game_id: int, unit_acc: dict) -> None:
                 stats.get("xgf_adjusted", 0),
                 stats.get("xga_adjusted", 0),
                 new_score,
+                *[(int(stats.get(c, 0)) if "xg" not in c else stats.get(c, 0)) for c in BAND_COLS],
                 game_id,
                 team_id,
                 unit_type,

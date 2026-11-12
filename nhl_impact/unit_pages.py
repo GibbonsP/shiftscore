@@ -112,7 +112,8 @@ def build_units(conn, min_toi: dict | int | None = None) -> list[dict]:
 
     rows = conn.execute(
         """SELECT game_id, team_id, unit_type, player_ids, toi_sec, cf, ca, gf, ga,
-                  xgf, xga, hdcf, hdca, unit_score, mdcf, mdca, ldcf, ldca
+                  xgf, xga, hdcf, hdca, unit_score, mdcf, mdca, ldcf, ldca,
+                  hdgf, hdga, mdgf, mdga, ldgf, ldga, hdxgf, hdxga, mdxgf, mdxga, ldxgf, ldxga
            FROM unit_game_stats ORDER BY game_id"""
     ).fetchall()
 
@@ -126,7 +127,7 @@ def build_units(conn, min_toi: dict | int | None = None) -> list[dict]:
     for (team_id, unit_type, pids), unit_rows in by_unit.items():
         abbrev = teams[team_id]
         log = []
-        for game_id, _t, _u, _p, toi, cf, ca, gf, ga, xgf, xga, hdcf, hdca, score, mdcf, mdca, ldcf, ldca in unit_rows:
+        for game_id, _t, _u, _p, toi, cf, ca, gf, ga, xgf, xga, hdcf, hdca, score, mdcf, mdca, ldcf, ldca, *band_gx in unit_rows:
             date, home, away = games[game_id]
             is_home = home == team_id
             opp_id = away if is_home else home
@@ -149,6 +150,8 @@ def build_units(conn, min_toi: dict | int | None = None) -> list[dict]:
 
         toi = sum(g["toi_sec"] for g in log)
         total_score = sum(g["score"] for g in log)
+        BANDX = ["hdgf", "hdga", "mdgf", "mdga", "ldgf", "ldga", "hdxgf", "hdxga", "mdxgf", "mdxga", "ldxgf", "ldxga"]
+        band_totals = [sum((r[18 + i] or 0) for r in unit_rows) for i in range(len(BANDX))]
         summary = {
             "gp": len(log), "toi_sec": toi,
             "cf": sum(g["cf"] for g in log), "ca": sum(g["ca"] for g in log),
@@ -161,6 +164,10 @@ def build_units(conn, min_toi: dict | int | None = None) -> list[dict]:
             "avg_score": round(total_score / len(log), 2),
             "score_per60": round(total_score / toi * 3600, 2) if toi else 0.0,
         }
+        # goals and xG by danger band (hdgf, hdga, mdgf, mdga, ldgf, ldga, then the same six for xG), as one short list and only for units that
+        # had shots on goal: thousands of units carry this, so it is kept compact
+        if any(band_totals):
+            summary["bx"] = [(round(v, 2) if i >= 6 else int(v)) for i, v in enumerate(band_totals)]
         pid_list = order_players(pids.split(","), slots)
         units.append(
             {

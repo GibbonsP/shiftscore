@@ -395,10 +395,16 @@ function unitSectionsHtml(units, abbrev, more, everything, types) {
   }).join("") + moreBtn;
 }
 
-// The shot danger breakout used on unit pages and the team special-teams section: the three danger bands across the top (high 16%+ to
-// score, medium 9-16%, low under 9%), one row per measure. cells are [count, small text, shade (-1..1, optional)].
+// The shot danger breakout used on unit pages and the team special-teams section: the three danger bands across the top (high 14%+ to
+// score, medium 7-14%, low under 7%), one row per measure. cells are [count, small text, shade (-1..1, optional)].
+// shading for a count of goals against what the shots were worth: 0 for an ordinary result, up to +/-1 (the sign says more or fewer goals than
+// expected) for an unusual one, judged against the size of the expectation so a one-goal gap on 0.5 expected goals counts for more than on 3
+function bandShade(g, x) {
+  const d = g - x, z = d / Math.sqrt(Math.max(x, 0.5));
+  return Math.abs(z) >= 0.75 && Math.abs(d) >= 0.3 ? Math.sign(d) * (0.15 + 0.85 * Math.min(1, (Math.abs(z) - 0.75) / 1.5)) : 0;
+}
 function dangerCardHtml(rows, total) {
-  const head = `<div class="dz-head"><span></span>${[["h", "High", "16%+"], ["m", "Medium", "9&ndash;16%"], ["l", "Low", "under 9%"]].map(([b, n, r]) => `<span class="dz-h ${b}">${n}<small>${r}</small></span>`).join("")}<span class="dz-h t">${total || "Total"}<small>shots on goal</small></span></div>`;
+  const head = `<div class="dz-head"><span></span>${[["h", "High", "14%+"], ["m", "Medium", "7&ndash;14%"], ["l", "Low", "under 7%"]].map(([b, n, r]) => `<span class="dz-h ${b}">${n}<small>${r}</small></span>`).join("")}<span class="dz-h t">${total || "Total"}<small>shots on goal</small></span></div>`;
   const cell = (c, cls) => { const sh = c[2], on = sh !== undefined && sh !== null && Math.abs(sh) > 0.12;
     return `<span class="dz-c ${cls}${on ? (sh > 0 ? " over" : " under") : ""}"${on ? ` style="--sh:${Math.round(14 + 30 * Math.min(1, Math.abs(sh)))}%"` : ""}><b>${c[0]}</b><small>${c[1] || "&nbsp;"}</small></span>`; };
   return `<div class="dz-wrap"><div class="dz" style="--dz-n:4">${head}${rows.map(r => `<div class="dz-team"><span class="dz-name">${r.name}</span>${r.cells.map((c, i) => cell(c, ["h", "m", "l", "t"][i])).join("")}</div>`).join("")}</div></div>`;
@@ -419,9 +425,14 @@ function unitDetailHtml(data, key) {
   const band = [[s.hdcf, s.hdca], [s.mdcf || 0, s.mdca || 0], [s.ldcf || 0, s.ldca || 0]];
   const sum = (i) => band.reduce((a, b) => a + b[i], 0);
   const shareCell = (f, a) => (f + a ? [Math.round(100 * f / (f + a)) + "%", `${f} of ${f + a}`, (f / (f + a) - 0.5) * 4] : ["&ndash;", "", null]);
+  const bx = s.bx || [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];   // goals then xG by band: [hdgf, hdga, mdgf, mdga, ldgf, ldga, hdxgf, hdxga, mdxgf, mdxga, ldxgf, ldxga]
+  const uG = [[bx[0], bx[1]], [bx[2], bx[3]], [bx[4], bx[5]]];
+  const uX = [[bx[6], bx[7]], [bx[8], bx[9]], [bx[10], bx[11]]];
+  const uCell = (n, g, x, against) => [n, `${Math.round(g)} G &middot; ${x.toFixed(2)} xG`, (against ? -1 : 1) * bandShade(g, x)];
+  const uSum = (arr, i) => arr.reduce((t, v) => t + v[i], 0);
   const dangerCard = dangerCardHtml([
-    { name: "Shots for", cells: [...band.map(b => [b[0], ""]), [sum(0), ""]] },
-    { name: "Shots against", cells: [...band.map(b => [b[1], ""]), [sum(1), ""]] },
+    { name: "Shots for", cells: [...band.map((b, k) => uCell(b[0], uG[k][0], uX[k][0], false)), uCell(sum(0), uSum(uG, 0), uSum(uX, 0), false)] },
+    { name: "Shots against", cells: [...band.map((b, k) => uCell(b[1], uG[k][1], uX[k][1], true)), uCell(sum(1), uSum(uG, 1), uSum(uX, 1), true)] },
     { name: "Share", cells: [...band.map(b => shareCell(b[0], b[1])), shareCell(sum(0), sum(1))] },
   ], "Total");
   const log = statTable(
@@ -437,7 +448,7 @@ function unitDetailHtml(data, key) {
     <div class="panel-caption">Unit Score counts the goals and expected goals this unit scored and allowed over its time together in each game. It's a running count, so more ice time means a bigger swing &mdash; Score / 60 normalizes for that.</div>
     <div class="detail-h3">Season Summary</div>${summary}
     <div class="detail-h3">Shot danger</div>${dangerCard}
-    <div class="panel-caption">Shots on goal for and against while this unit was on the ice, by how likely each shot was to score. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
+    <div class="panel-caption">Shots on goal for and against while this unit was on the ice, by how likely each shot was to score, with the goals and expected goals (xG) from them. Under shots for, green means more goals than the shots were worth; under shots against, green means fewer goals allowed than expected. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
     <div class="detail-h3">Game Log (${s.gp} games)</div>${log}
   `;
 }
@@ -814,7 +825,7 @@ function teamGameLogHtml(data) {
     ${th("HD", 1)}${th("MD", 1)}${th("LD", 1)}${th("PP goals", 1)}${th("PIM", 1)}${th("FO%", 1)}${th("Skater")}${th("Forward line")}${th("D pair")}${th("Goalie")}${th("Grade")}</tr>`;
   return `<div class="detail-h3">Game log <span class="detail-sub">newest first</span></div>
     <div class="table-scroll"><table class="glog"><thead>${head1}${head2}</thead><tbody>${rows.reverse().join("")}${totRow}</tbody></table></div>
-    <div class="panel-caption">One row per game. Shots are shots on goal (SOG for, SOGA against); CF% is the team's share of shot attempts and xGF% its share of expected goals, green when above 50%. Shot danger counts shots on goal by how likely each was to score: HD is high (16%+), MD medium (9&ndash;16%), LD low (under 9%), green when the team had more than its opponent. PP goals is power-play goals for&ndash;against. Best of the night is the top Adjusted Game Score among skaters, and the best forward line and defense pair by Unit Score (3:00 together at least). The goalie's grade is from goals saved above expected in the game; the small figure beside his name is saves/shots.</div>`;
+    <div class="panel-caption">One row per game. Shots are shots on goal (SOG for, SOGA against); CF% is the team's share of shot attempts and xGF% its share of expected goals, green when above 50%. Shot danger counts shots on goal by how likely each was to score: HD is high (14%+), MD medium (7&ndash;14%), LD low (under 7%), green when the team had more than its opponent. PP goals is power-play goals for&ndash;against. Best of the night is the top Adjusted Game Score among skaters, and the best forward line and defense pair by Unit Score (3:00 together at least). The goalie's grade is from goals saved above expected in the game; the small figure beside his name is saves/shots.</div>`;
 }
 // shot danger on the power play (shots for) and the penalty kill (shots against), season totals for the team
 function teamSpecialDangerHtml(data) {
@@ -1026,7 +1037,7 @@ function playerDetailHtml(playerId, teamData, sec) {
     })
   ) : "";
   // shot danger: the player's own unblocked shots by band (season sums of the per-game splits) beside the chances
-  // his team created and allowed while he was on the ice (high 16%+ to score, medium 9-16%, low under 9%)
+  // his team created and allowed while he was on the ice (high 14%+ to score, medium 7-14%, low under 7%)
   const own = p.splits ? ["EV", "PP", "PK"].reduce((a, k) => (p.splits[k] ? [a[0] + p.splits[k][13], a[1] + p.splits[k][14], a[2] + p.splits[k][15]] : a), [0, 0, 0]) : null;
   // flipped: the danger bands run across the top, the measures down the side
   const BANDS_HEAD = ["High", "Medium", "Low"].map(label => ({ label, num: true })).concat([{ label: "Total", num: true }]);
@@ -1037,14 +1048,19 @@ function playerDetailHtml(playerId, teamData, sec) {
     // shaded green when he scored more than expected and red when fewer
     const spl = (i) => ["EV", "PP", "PK"].reduce((t, k) => t + (p.splits && p.splits[k] ? (p.splits[k][i] || 0) : 0), 0);
     const ownN = [13, 14, 15].map(spl), ownG = [16, 17, 18].map(spl), ownX = [19, 20, 21].map(spl);
-    const shade = (g, x) => { const d = g - x, z = d / Math.sqrt(Math.max(x, 0.5)); return Math.abs(z) >= 0.75 && Math.abs(d) >= 0.3 ? Math.sign(d) * (0.15 + 0.85 * Math.min(1, (Math.abs(z) - 0.75) / 1.5)) : 0; };
+    const shade = bandShade;
     const ownCell = (n, g, x) => [n, `${Math.round(g)} G &middot; ${x.toFixed(2)} xG`, shade(g, x)];
     const tot = [sum3(ownN), sum3(ownG), sum3(ownX)];
+    const gF = [s.hdgf || 0, s.mdgf || 0, s.ldgf || 0], gA = [s.hdga || 0, s.mdga || 0, s.ldga || 0];
+    const xF = [s.hdxgf || 0, s.mdxgf || 0, s.ldxgf || 0], xA = [s.hdxga || 0, s.mdxga || 0, s.ldxga || 0];
+    const onCell = (n, g, x, against) => [n, `${Math.round(g)} G &middot; ${x.toFixed(2)} xG`, (against ? -1 : 1) * shade(g, x)];
     const share = (x, y) => (x + y ? [Math.round(100 * x / (x + y)) + "%", `${x} of ${x + y}`, (x / (x + y) - 0.5) * 4] : ["&ndash;", "", null]);
     return dangerCardHtml([
       { name: "Own shots", cells: [...[0, 1, 2].map(i => ownCell(ownN[i], ownG[i], ownX[i])), ownCell(tot[0], tot[1], tot[2])] },
-      { name: "On ice for", cells: [...f.map(x => [x, ""]), [sum3(f), ""]] },
-      { name: "On ice against", cells: [...a.map(x => [x, ""]), [sum3(a), ""]] },
+      // on the ice: the chances for and against by band with the goals and the expected goals from them; green when the goals went the team's way
+      // by more than the shots were worth, red when against
+      { name: "On ice for", cells: [...[0, 1, 2].map(i => onCell(f[i], gF[i], xF[i], false)), onCell(sum3(f), sum3(gF), sum3(xF), false)] },
+      { name: "On ice against", cells: [...[0, 1, 2].map(i => onCell(a[i], gA[i], xA[i], true)), onCell(sum3(a), sum3(gA), sum3(xA), true)] },
       { name: "Share", cells: [...f.map((x, i) => share(x, a[i])), share(sum3(f), sum3(a))] },
     ], "Total");
   })() : "";
@@ -1084,7 +1100,7 @@ function playerDetailHtml(playerId, teamData, sec) {
       ${advanced && !isGoalie ? `<div class="detail-h3">Advanced</div>${advanced}<div class="panel-caption">CF%, xGF% and HDCF% are the team's share of shot attempts, expected goals and high-danger shots on goal while he was on the ice (all situations). OZ start % is offensive-zone shift starts over offensive plus defensive.</div>` : ""}`,
     log: () => `<div class="detail-h3">Game Log (${s.gp} games)</div>${glog ? goalieLogTable(glog) : log + gsKeyHtml("Raw and Adjusted colors")}`,
     splits: () => `${splits ? `<div class="detail-h3">By situation</div>${splits}` : ""}
-      ${dangerTable ? `<div class="detail-h3">Shot danger</div>${dangerTable}<div class="panel-caption">Own shots are the shots on goal he took, by how likely each was to score (high 16%+, medium 9-16%, low under 9%). Under each count are his goals and his expected goals (xG) from those shots, the chance each had of scoring added up: green means he scored more than expected, red fewer. On ice for and against are the shots on goal his team took and allowed while he was out there, and Share is his team's part of them.</div>` : ""}`,
+      ${dangerTable ? `<div class="detail-h3">Shot danger</div>${dangerTable}<div class="panel-caption">Own shots are the shots on goal he took, by how likely each was to score (high 14%+, medium 7-14%, low under 7%). Under each count are his goals and his expected goals (xG) from those shots, the chance each had of scoring added up: green means he scored more than expected, red fewer. On ice for and against are the shots on goal his team took and allowed while he was out there, each with the goals and expected goals from them: for the team, green means more goals than the shots were worth; against it, green means fewer goals allowed than expected. Share is his team's part of the shots.</div>` : ""}`,
     danger: () => goalieDangerTable ? `<div class="detail-h3">Goalie results by shot danger</div>${goalieDangerTable}<div class="panel-caption">GSAx is expected goals against minus goals allowed in each band.</div>` : '<div class="empty">No shot-danger data yet.</div>',
     units: () => unitsHtml || '<div class="empty">No lines or pairs with enough time together yet.</div>',
   }[secKey]();
@@ -2055,7 +2071,7 @@ const TIP_AVG = "A per-game average over the season. ";
 const TIP_RAW = "Game Score as it came: points for goals, assists, shots, blocks, faceoffs and penalties, plus how the team did while he was on the ice (shot attempts, goals, expected goals). No adjustments.";
 const TIP_ADJ = "Raw Game Score plus credit for tougher opponents (QoC), minus the average for his position, so 0 is a typical forward or defenseman. This is the number to compare players on.";
 const TIP_UNIT = "Unit Score counts the goals and expected goals the unit scored and allowed over the time it was together. Positive is a good night.";
-const TIP_DANGER = (band, rule) => `${band} danger: shots on goal ${rule} (low under 9%, medium 9–16%, high 16%+), from the shot-quality model. HDCF / HDGF style counts are chances for and goals that went in.`;
+const TIP_DANGER = (band, rule) => `${band} danger: shots on goal ${rule} (low under 7%, medium 7–14%, high 14%+), from the shot-quality model. HDCF / HDGF style counts are chances for and goals that went in.`;
 const GLOSSARY = {
   "raw": TIP_RAW, "game score": TIP_RAW, "game score*": TIP_RAW,
   "avg raw": TIP_AVG + TIP_RAW, "avg game score": TIP_AVG + TIP_RAW, "game score (avg)": TIP_AVG + TIP_RAW,
@@ -2067,7 +2083,7 @@ const GLOSSARY = {
   "ixg / 60": "Individual expected goals per 60 minutes: the chance of scoring on his own shots, as a rate.",
   "g - ixg": "Goals minus ixG. Positive means he scored more than his shot quality predicts (finishing luck or skill); negative, fewer.",
   "goals − ixg": "Goals minus ixG. Positive means he scored more than his shot quality predicts (finishing luck or skill); negative, fewer.",
-  "xg": "Expected goals: how many goals the quality of a team's shot attempts would normally produce. A better measure of the chances than the shot count.",
+  "xg": "Expected goals: how many goals the quality of a team's shots would normally produce. A better measure of the chances than the shot count. On game pages, cards and the Home scoreboard a team's xG counts shots on goal only; season tables and per-player on-ice numbers count every unblocked attempt, so they run higher.",
   "xgf": "Expected goals for: the scoring chances created while on the ice, counted by shot quality.",
   "xga": "Expected goals against: the scoring chances allowed while on the ice, counted by shot quality.",
   "xgf%": "Share of all expected goals (for plus against) that went the team's way while on the ice. Above 50% means better chances than the other side.",
@@ -2075,10 +2091,10 @@ const GLOSSARY = {
   "xgf / 60": "Expected goals for per 60 minutes on the ice.",
   "xga / 60": "Expected goals against per 60 minutes on the ice.",
   "cf%": "Share of all shot attempts (on goal, missed and blocked) that went the team's way while on the ice. Above 50% means more of the play.",
-  "hdcf%": "Share of all high-danger shots on goal (16%+ chance to score) that went the team's way while on the ice.",
+  "hdcf%": "Share of all high-danger shots on goal (14%+ chance to score) that went the team's way while on the ice.",
   "expected goals (xgf%)": "Share of all expected goals (for plus against) that went the team's way. Above 50% means better chances than the other side.",
   "shot attempts (cf%)": "Share of all shot attempts (on goal, missed and blocked) that went the team's way. Above 50% means more of the play.",
-  "high-danger chances (hdcf%)": "Share of all high-danger shots on goal (16%+ chance to score) that went the team's way.",
+  "high-danger chances (hdcf%)": "Share of all high-danger shots on goal (14%+ chance to score) that went the team's way.",
   "shots on goal (sf%)": "Share of all shots on goal that went the team's way.",
   "expected goals for per game": "Expected goals for per game: the scoring chances the team creates, counted by shot quality rather than just goals.",
   "expected goals against per game": "Expected goals against per game: the scoring chances the team allows, counted by shot quality.",
@@ -2086,9 +2102,9 @@ const GLOSSARY = {
   "oz start %": "Share of his shifts that began in the offensive zone (against the defensive zone). Higher means easier starting spots.",
   "gsax": "Goals saved above expected: the chance each shot on goal he faced had of scoring (from the shot-quality model), added up, minus the goals he actually allowed. Positive means he stopped more than an average goalie would have on the same shots.",
   "grade": "Start grade from goals saved above expected in the game: Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad \u22120.5 to \u22121.5, Blown worse than \u22121.5.",
-  "hd": TIP_DANGER("High", "with a 16% or better chance of scoring") + " Shown as shots for\u2013against.",
-  "md": TIP_DANGER("Medium", "with a 9\u201316% chance of scoring") + " Shown as shots for\u2013against.",
-  "ld": TIP_DANGER("Low", "with under a 9% chance of scoring") + " Shown as shots for\u2013against.",
+  "hd": TIP_DANGER("High", "with a 14% or better chance of scoring") + " Shown as shots for\u2013against.",
+  "md": TIP_DANGER("Medium", "with a 7\u201314% chance of scoring") + " Shown as shots for\u2013against.",
+  "ld": TIP_DANGER("Low", "with under a 7% chance of scoring") + " Shown as shots for\u2013against.",
   "sog": "Shots on goal (saves plus goals).", "soga": "Shots on goal against.", "pp goals": "Power-play goals for\u2013against.",
   "d pair": "The defense pair with the best Unit Score that night (at least 3:00 together).",
   "forward line": "The forward line with the best Unit Score that night (at least 3:00 together).",
@@ -2098,12 +2114,12 @@ const GLOSSARY = {
   "rating / 60": "Unit Score per 60 minutes together, pulled toward zero for units with little ice time (a rate over a few dozen minutes is mostly luck).",
   "per 60": "Unit Score per 60 minutes together, pulled toward zero for units with little ice time (a rate over a few dozen minutes is mostly luck).",
   "raw / 60": "Unit Score per 60 minutes together, without the pull toward zero.",
-  "high": TIP_DANGER("High", "with a 16% or better chance of scoring"),
-  "medium": TIP_DANGER("Medium", "with a 9–16% chance of scoring"),
-  "low": TIP_DANGER("Low", "with under a 9% chance of scoring"),
-  "high danger hdcf / hdgf": TIP_DANGER("High", "with a 16% or better chance of scoring"),
-  "medium danger mdcf / mdgf": TIP_DANGER("Medium", "with a 9–16% chance of scoring"),
-  "low danger ldcf / ldgf": TIP_DANGER("Low", "with under a 9% chance of scoring"),
+  "high": TIP_DANGER("High", "with a 14% or better chance of scoring"),
+  "medium": TIP_DANGER("Medium", "with a 7–14% chance of scoring"),
+  "low": TIP_DANGER("Low", "with under a 7% chance of scoring"),
+  "high danger hdcf / hdgf": TIP_DANGER("High", "with a 14% or better chance of scoring"),
+  "medium danger mdcf / mdgf": TIP_DANGER("Medium", "with a 7–14% chance of scoring"),
+  "low danger ldcf / ldgf": TIP_DANGER("Low", "with under a 7% chance of scoring"),
 };
 // The glossary page: the same definitions as the hover text, grouped. Entries are [term, definition].
 function glossaryHtml() {
@@ -2117,7 +2133,7 @@ function glossaryHtml() {
     ]],
     ["Shot quality", [
       ["xG (expected goals)", G("xg")], ["ixG", G("ixg")], ["G − ixG", G("g - ixg")],
-      ["Shot danger bands", "Every shot on goal is graded by its chance of scoring: High is 16% or better, Medium 9–16%, Low under 9%. HDCF / MDCF / LDCF are chances for each band; the ending A means against."],
+      ["Shot danger bands", "Every shot on goal is graded by its chance of scoring: High is 14% or better, Medium 7–14%, Low under 7%. HDCF / MDCF / LDCF are chances for each band; the ending A means against."],
       ["xGF / xGA", G("xgf") + " " + G("xga")],
     ]],
     ["Shares and luck", [

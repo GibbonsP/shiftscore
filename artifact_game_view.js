@@ -25,12 +25,12 @@ const f2 = (v) => (v === null || v === undefined ? "" : v.toFixed(2));
 // 20-40% below average, 40-60% average, 60-80% good, 80-95% great, top 5% elite). Adjusted is judged against all skaters; raw Game Score is judged
 // against his own position (defensemen score less of what raw counts). Re-measure these from the database now and then (scratch/gs_cuts.py).
 const GS_CUTS = {
-  adj: [-1.08, -0.67, -0.32, 0.09, 0.69, 1.68],          // Adjusted Game Score, one game
-  avg: [-0.5, -0.3, -0.15, 0.04, 0.31, 0.7],             // Adjusted Game Score, a season average
-  rawF: [-0.5, -0.1, 0.25, 0.69, 1.34, 2.4],             // raw Game Score, one game, forwards
-  rawD: [-0.64, -0.2, 0.14, 0.49, 1.0, 1.85],            // ... defensemen
-  rawAvgF: [0.1, 0.28, 0.45, 0.65, 0.95, 1.32],          // raw season average, forwards
-  rawAvgD: [0.02, 0.16, 0.27, 0.42, 0.61, 0.96],         // ... defensemen
+  adj: [-1.12, -0.69, -0.33, 0.09, 0.71, 1.72],          // Adjusted Game Score, one game
+  avg: [-0.51, -0.31, -0.15, 0.04, 0.31, 0.71],             // Adjusted Game Score, a season average
+  rawF: [-0.54, -0.12, 0.24, 0.69, 1.36, 2.43],             // raw Game Score, one game, forwards
+  rawD: [-0.67, -0.22, 0.13, 0.49, 1.02, 1.89],            // ... defensemen
+  rawAvgF: [0.09, 0.27, 0.45, 0.65, 0.94, 1.33],          // raw season average, forwards
+  rawAvgD: [0.02, 0.15, 0.26, 0.41, 0.61, 0.99],         // ... defensemen
 };
 const GS_TIER_NAME = ["Awful", "Poor", "Below average", "Average", "Good", "Great", "Elite"];
 const GS_CARD_COLORS = ["#ff5d5d", "#f2805f", "#e8b86c", "#dbe6f0", "#b4e07a", "#55d49a", "#19e6c8"];   // the same tiers on the dark share cards
@@ -82,8 +82,8 @@ const GameView = (() => {
   const TF = ["toi", "goals", "sog", "attempts", "xgf", "hdc", "hits", "blocks", "tk", "gv", "pim", "fow", "fol", "mdc", "ldc"];
   const GF = ["toi", "sf", "ga", "xga", "sfh", "gah", "xgah", "sfm", "gam", "xgam", "sfl", "gal", "xgal"];
   // shot danger bands from the chance a shot on goal scores (s[10], second model; falls back to xG s[5]):
-  // low < 9%, medium 9-16%, high >= 16%
-  const BAND = (s) => { const p = s[10] != null ? s[10] : s[5]; return p >= 0.16 ? "h" : p >= 0.09 ? "m" : "l"; };
+  // low < 7%, medium 7-14%, high >= 14%
+  const BAND = (s) => { const p = s[10] != null ? s[10] : s[5]; return p >= 0.14 ? "h" : p >= 0.07 ? "m" : "l"; };
   const BAND_COLOR = { h: "var(--bad)", m: "var(--accent)", l: "var(--muted)" };
   const BAND_NAME = { h: "High danger", m: "Medium danger", l: "Low danger" };
   const idx = (fields) => Object.fromEntries(fields.map((f, i) => [f, i]));
@@ -166,12 +166,20 @@ const GameView = (() => {
     };
     return `<div class="detail-h3">Shot map</div>${playerBar}${bar}<div class="gv-maps">${one(0)}${one(1)}</div>
       <div class="gv-keys">
-        <span class="gv-key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--bad)"/></svg>High danger (16%+ to score)</span>
-        <span class="gv-key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--accent)"/></svg>Medium (9-16%)</span>
-        <span class="gv-key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--muted)"/></svg>Low (under 9%)</span>
+        <span class="gv-key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--bad)"/></svg>High danger (14%+ to score)</span>
+        <span class="gv-key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--accent)"/></svg>Medium (7-14%)</span>
+        <span class="gv-key"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--muted)"/></svg>Low (under 7%)</span>
       </div>
       <div class="panel-caption">Every unblocked shot, drawn toward the net it attacked, colored by danger. Solid circles with a dark ring are goals, shaded circles are shots on goal, hollow circles are misses, and bigger circles are higher expected goals. Hover (or tap) a shot to see the shooter, time, xG and result; use the player menu to see one shooter's chances.</div>`;
   }
+
+  // Team expected goals for a game are counted on SHOTS ON GOAL: each shot on goal with the goalie in net is worth the chance a shot on goal
+  // becomes a goal (s[10]; s[5] on games saved before that field existed). Misses, blocked shots and empty-net attempts add nothing. This
+  // is the same definition as the danger bands, the goalies' expected goals against and the team charts, and it lands within about 0.1 of
+  // Clear Sight's xG; the attempt-based xG (every unblocked attempt) stays inside Game Score's on-ice terms and the per-player xGF / xGA.
+  const isChance = (s) => s[6] >= 1 && s[9] !== 1;
+  const chanceXg = (s) => (s[10] !== null && s[10] !== undefined ? s[10] : s[5]);
+  const teamXg = (shots, sideIdx, periods) => (shots || []).filter(s => s[2] === sideIdx && isChance(s) && (!periods || periods.includes(s[0]))).reduce((a, s) => a + chanceXg(s), 0);
 
   function xgTimeline(g, shots) {
     if (!shots.length) return "";
@@ -181,7 +189,7 @@ const GameView = (() => {
     const W = 640, H = 210, L = 38, R = 12, Tp = 14, B = 28;
     const series = [0, 1].map(side => {
       let run = 0;
-      return shots.filter(s => s[2] === side).sort((a, b) => at(a) - at(b)).map(s => { run += s[5]; return { t: at(s), v: run, goal: s[6] === 2, s }; });
+      return shots.filter(s => s[2] === side && (isChance(s) || s[6] === 2)).sort((a, b) => at(a) - at(b)).map(s => { if (isChance(s)) run += chanceXg(s); return { t: at(s), v: run, goal: s[6] === 2, s }; });
     });
     const ymax = Math.max(1, ...series.map(a => (a.length ? a[a.length - 1].v : 0))) * 1.12;
     const X = (t) => L + (W - L - R) * t / T, Y = (v) => Tp + (H - Tp - B) * (1 - v / ymax);
@@ -267,19 +275,19 @@ const GameView = (() => {
   }
   // [P(away wins in regulation), P(tie after regulation), P(home wins in regulation)] from regulation shots
   function regulationOdds(shots) {
-    const da = goalDistribution(shots.filter(s => s[0] <= 3 && s[2] === 0).map(s => s[5]));
-    const dh = goalDistribution(shots.filter(s => s[0] <= 3 && s[2] === 1).map(s => s[5]));
+    const da = goalDistribution(shots.filter(s => s[0] <= 3 && s[2] === 0 && isChance(s)).map(chanceXg));
+    const dh = goalDistribution(shots.filter(s => s[0] <= 3 && s[2] === 1 && isChance(s)).map(chanceXg));
     let a = 0, t = 0, h = 0;
     for (let i = 0; i < da.length; i++) for (let j = 0; j < dh.length; j++) { const p = da[i] * dh[j]; if (i > j) a += p; else if (i === j) t += p; else h += p; }
     return [a, t, h];
   }
   // 2) A power play or penalty kill's night is judged on the chances it created or allowed, not on whether a goal
-  //    went in: expected goals against what the league's average power play makes from the same time (8.2 xG per 60),
-  //    scaled by the usual spread for that much time. z >= 0.25 is a good night (top quarter of nights), >= 0.6 great.
-  const LEAGUE_PP_XG60 = 8.24;
+  //    went in: expected goals against what the league's average power play makes from the same time (8.1 xG per 60),
+  //    scaled by the usual spread for that much time. z >= 0.29 is a good night (top quarter of nights), >= 0.72 great.
+  const LEAGUE_PP_XG60 = 8.12;
   function nightRating(surplus, expected) {
     const z = surplus / Math.sqrt(Math.max(expected, 0.05));
-    return z >= 0.6 ? ["Great night", "pos"] : z >= 0.25 ? ["Good night", "pos"] : z > -0.32 ? ["Average night", ""] : z > -0.5 ? ["Poor night", "neg"] : ["Bad night", "neg"];
+    return z >= 0.72 ? ["Great night", "pos"] : z >= 0.29 ? ["Good night", "pos"] : z > -0.36 ? ["Average night", ""] : z > -0.55 ? ["Poor night", "neg"] : ["Bad night", "neg"];
   }
 
 
@@ -330,7 +338,7 @@ const GameView = (() => {
     // to "another goalie on his team faced more shots"
     const relief = x[4] !== undefined ? !x[4] : g.gl.some(y => y[2] === x[2] && y[0] !== x[0] && named(sum(y[3], GF, AP, AS), GF).sf > v.sf);
     const winner = g.hs === g.as ? null : (g.as > g.hs ? "away" : "home");
-    const gsax = v.xga - v.ga, o = { gsax, relief, win: winner === side, txf: named(sum(g.tc[side], TF, AP, AS), TF).xgf, txa: named(sum(g.tc[opp], TF, AP, AS), TF).xgf };
+    const gsax = v.xga - v.ga, o = { gsax, relief, win: winner === side, txf: teamXg(g.shots, side === "away" ? 0 : 1), txa: teamXg(g.shots, side === "away" ? 1 : 0) };
     return { gr: goalieGrade(gsax), tags: goalieTags(o), sf: v.sf, ga: v.ga, gsax, relief };
   }
   function gameCardSvg(g, side, logoUri) {
@@ -375,7 +383,7 @@ const GameView = (() => {
     // goals against expected goals by danger band, for this team's shots and the shots against it, shaded like the game page's shot danger card:
     // green with a triangle up when the goals beat the expected goals from those shots, red with a triangle down when they fell short, the darkest
     // shade for an unusual gap (judged against the size of the expectation, so ordinary bounces stay pale)
-    const dzBands = [["h", "HIGH", "16%+", CARD.bad], ["m", "MEDIUM", "9-16%", CARD.accent], ["l", "LOW", "under 9%", CARD.muted]];
+    const dzBands = [["h", "HIGH", "14%+", CARD.bad], ["m", "MEDIUM", "7-14%", CARD.accent], ["l", "LOW", "under 7%", CARD.muted]];
     const dzOf = (arr, b) => { const q = arr.filter(x => (b === "t" ? true : BAND(x) === b)); return [q.length, q.filter(x => x[6] === 2).length, q.reduce((a, x) => a + (x[10] != null ? x[10] : x[5]), 0)]; };
     const dzH = shots.length ? 312 : 0;
     const dzSvg = shots.length ? (() => {
@@ -411,7 +419,7 @@ const GameView = (() => {
         ${heads(cf)}${heads(ca)}<line x1="640" y1="${y0 - 20}" x2="640" y2="${y0 + 46 + perRows.length * 38}" stroke="${CARD.muted}" stroke-width="1" opacity="0.5"/>${body}`;
     })() : "";
     const dangerBlock = shots.length ? `<text x="56" y="${mapTop + 6}" font-size="26" font-weight="800" fill="${CARD.accent}" letter-spacing="2" ${'font-family="Helvetica Neue, Helvetica, Arial, sans-serif"'}>SHOT DANGER</text>
-      <text x="56" y="${mapTop + 32}" font-size="17" fill="${CARD.muted}" ${'font-family="Helvetica Neue, Helvetica, Arial, sans-serif"'}>Every shot on goal (empty net excluded) by chance of scoring: high 16%+, medium 9-16%, low under 9%.</text>
+      <text x="56" y="${mapTop + 32}" font-size="17" fill="${CARD.muted}" ${'font-family="Helvetica Neue, Helvetica, Arial, sans-serif"'}>Every shot on goal (empty net excluded) by chance of scoring: high 14%+, medium 7-14%, low under 7%.</text>
       ${dzSvg}${perSvg}${mapFor.svg}${mapAg.svg}` : "";
     const H = Math.ceil(Math.max(1350, (shots.length ? mapTop + 44 + perH + dzH + mapFor.height + 150 : sumTop + lines.length * 40 + 150)));
     const esc = escapeHtml, font = 'font-family="Helvetica Neue, Helvetica, Arial, sans-serif"';
@@ -422,7 +430,7 @@ const GameView = (() => {
       + `<text x="1030" y="${keyY + 5}" text-anchor="end" font-size="13" fill="${CARD.muted}" ${font}>vs all skater games</text>`;
     const live = g.live && (g.live.state === "LIVE" || g.live.state === "CRIT");
     const status = live ? (g.live.status || "LIVE") : g.oc === "REG" ? "FINAL" : "FINAL/" + g.oc;
-    const xa = named(sum(g.tc.away, TF, [0, 1, 2, 3], [0, 1, 2, 3, 4]), TF).xgf, xh = named(sum(g.tc.home, TF, [0, 1, 2, 3], [0, 1, 2, 3, 4]), TF).xgf;
+    const xa = teamXg(g.shots, 0), xh = teamXg(g.shots, 1);
     const logo = (abbr, x) => (logoUri && logoUri[abbr] ? `<image href="${logoUri[abbr]}" x="${x}" y="108" width="130" height="130" preserveAspectRatio="xMidYMid meet"/>` : `<text x="${x + 65}" y="196" text-anchor="middle" font-size="44" font-weight="800" fill="${CARD.accent}" ${font}>${esc(abbr)}</text>`);
     const maxAbs = Math.max(3, ...rows.map(r => Math.abs(r.score)));
     const barScale = 34 / maxAbs;
@@ -507,7 +515,7 @@ const GameView = (() => {
   // totals for a game tile on the Home page: shots on goal and expected goals for each team, and the goals in order
   function tileStats(g) {
     const sog = (side) => Object.values(g.bp[side].sog).reduce((x, y) => x + y, 0);
-    const xg = (side) => named(sum(g.tc[side], TF, [0, 1, 2, 3], [0, 1, 2, 3, 4]), TF).xgf;
+    const xg = (side) => teamXg(g.shots, side === "away" ? 0 : 1);
     return { sog: [sog("away"), sog("home")], xg: [xg("away"), xg("home")], goals: (g.goals || []).map(x => [x.label, x.time, x.team, x.scorer]) };
   }
 
@@ -585,7 +593,7 @@ const GameView = (() => {
       filtersEl = el.querySelector(".gv-filters"), bodyEl = el.querySelector(".gv-body");
 
     // each team's expected goals for the whole game, every period and situation (the shootout isn't included)
-    const gameXg = (side) => named(sum(g.tc[side], TF, [0, 1, 2, 3], [0, 1, 2, 3, 4]), TF).xgf;
+    const gameXg = (side) => teamXg(g.shots, side === "away" ? 0 : 1);
 
     function renderHead() {
       const live = g.live && (g.live.state === "LIVE" || g.live.state === "CRIT");
@@ -670,7 +678,7 @@ const GameView = (() => {
           `<strong>${final}</strong>`,
           gameXg(side).toFixed(2),
         ])
-      ) + '<div class="panel-caption">xG: the goals each team should have scored from the quality of its shots.</div>'
+      ) + '<div class="panel-caption">xG: the goals each team should have scored from the quality of its shots on goal (misses, blocks and empty-net shots are not counted).</div>'
         + (g.oc === "SO" ? '<div class="panel-caption">Decided in a shootout; the winner is credited one goal in the final score. xG does not include the shootout.</div>' : "");
 
       // --- team stats
@@ -685,7 +693,7 @@ const GameView = (() => {
       const STAT_GROUPS = [
         ["Chances", [
           ["Goals", s => T[s].goals], ["Shots on goal", s => T[s].sog], ["Shot attempts (Corsi)", s => T[s].attempts],
-          ["Expected goals (xG)", s => T[s].xgf.toFixed(2), s => T[s].xgf], ["High-danger shots on goal", s => T[s].hdc],
+          ["Expected goals (xG)", s => gameXg(s).toFixed(2), s => gameXg(s)], ["High-danger shots on goal", s => T[s].hdc],
           ["Medium-danger shots on goal", s => T[s].mdc || 0], ["Low-danger shots on goal", s => T[s].ldc || 0]]],
         ["Play", [
           ["Time on ice", s => toiStr(T[s].toi), s => T[s].toi], ["Hits", s => T[s].hits], ["Blocked shots", s => T[s].blocks],
@@ -775,7 +783,7 @@ const GameView = (() => {
         return statTable(SK_HEADERS[state.view], rows);
       };
       const skNote = state.view === "ch"
-        ? '<div class="panel-caption">Shot quality by danger band. Chances created are the shots on goal the player took himself, split by danger below it. xGF and xGA are expected goals over every unblocked attempt; the high, medium and low-danger chances for and against (HDCF, HDCA, MDCF, MDCA, LDCF, LDCA) are the shots on goal his team took and allowed while he was on the ice. High danger is a 16%+ chance for a shot on goal to score, medium 9-16%, low under 9%.' + '</div>'
+        ? '<div class="panel-caption">Shot quality by danger band. Chances created are the shots on goal the player took himself, split by danger below it. xGF and xGA are expected goals over every unblocked attempt; the high, medium and low-danger chances for and against (HDCF, HDCA, MDCF, MDCA, LDCF, LDCA) are the shots on goal his team took and allowed while he was on the ice. High danger is a 14%+ chance for a shot on goal to score, medium 7-14%, low under 7%.' + '</div>'
         : state.view === "adv"
           ? '<div class="panel-caption">CF% and xGF% are the share of shot attempts and expected goals for the team while the player was on the ice.</div>' + gsKeyHtml("Game Score and Adjusted colors")
           : "";
@@ -858,7 +866,7 @@ const GameView = (() => {
         const orow = (label, fn) => [label, fn("away"), fn("home")];
         const otTeam = statTable([{ label: "" }, { label: g.away, num: true }, { label: g.home, num: true }], [
           orow("Time on ice", s2 => toiStr(ots[s2].toi)), orow("Shots on goal", s2 => ots[s2].sog), orow("Shot attempts", s2 => ots[s2].attempts),
-          orow("Expected goals (xG)", s2 => ots[s2].xgf.toFixed(2)), orow("High-danger shots on goal", s2 => ots[s2].hdc),
+          orow("Expected goals (xG)", s2 => teamXg(g.shots, s2 === "away" ? 0 : 1, [4]).toFixed(2)), orow("High-danger shots on goal", s2 => ots[s2].hdc),
           orow("Power-play time", s2 => toiStr(named(sum(g.tc[s2], TF, OT, [2]), TF).toi)),
         ]);
         const KIND = { line: "Line", pair: "Pair", pp: "PP", pk: "PK", ev4: "4v4", ev3: "3v3" };
@@ -934,7 +942,7 @@ const GameView = (() => {
           const band = (sd, b) => { const q = shots.filter(x => x[2] === sd && x[9] !== 1 && x[6] >= 1 && BAND(x) === b); return [q.length, q.filter(x => x[6] === 2).length, q.reduce((a, x) => a + (x[10] != null ? x[10] : x[5]), 0)]; };
           const enRow = (sd) => { const q = shots.filter(x => x[2] === sd && x[9] === 1); return [q.filter(x => x[6] >= 1).length, q.filter(x => x[6] === 2).length, q.reduce((a, x) => a + x[5], 0)]; };
           // axes: the danger bands run across the top, and each team gets a shots-on-goal, a goals and an xG row
-          const bandCols = [["h", "High", "16%+"], ["m", "Medium", "9&ndash;16%"], ["l", "Low", "under 9%"]];
+          const bandCols = [["h", "High", "14%+"], ["m", "Medium", "7&ndash;14%"], ["l", "Low", "under 7%"]];
           const hasEmpty = shots.some(x => x[9] === 1);
           // one compact card: a row per team, the three danger bands across the top, and under each team a bar showing how its
           // shots split between the bands (red high, blue medium, gray low, the same colors as the shot maps)
@@ -1031,7 +1039,7 @@ const GameView = (() => {
           const cell = (side, kind) => { const r = stRowsFor(side, kind)[0]; return r ? `${r[5]} <span class="detail-sub">${r[2]} xG ${kind === "pp" ? "for" : "against"} (typical ${r[3]}), ${r[4]} goal${r[4] === 1 ? "" : "s"}</span>` : "&ndash;"; };
           const rows = ["away", "home"].map(sd => [links.team(g[sd]), cell(sd, "pp"), cell(sd, "pk")]);
           return rows.some(r => r[1] !== "&ndash;" || r[2] !== "&ndash;")
-            ? `<div class="detail-h3">Special teams: good night or bad night?</div>${statTable([{ label: "Team" }, { label: "Power play" }, { label: "Penalty kill" }], rows)}<div class="panel-caption">Judged on the chances, not the score: expected goals against what the league's average power play (8.2 per 60 minutes) makes from the same time. Every unit's night is under Lines &amp; special teams.</div>` : "";
+            ? `<div class="detail-h3">Special teams: good night or bad night?</div>${statTable([{ label: "Team" }, { label: "Power play" }, { label: "Penalty kill" }], rows)}<div class="panel-caption">Judged on the chances, not the score: expected goals against what the league's average power play (8.1 per 60 minutes) makes from the same time. Every unit's night is under Lines &amp; special teams.</div>` : "";
         })();
         // goalie grades for the game, away team first and the starter first within a team (nothing while the game is live)
         const goaliesHtml = (() => {
@@ -1044,7 +1052,7 @@ const GameView = (() => {
         return { verdict: verdictHtml, danger: dangerHtml, perf: perfHtml, st: stCompact, goalies: goaliesHtml,
           units: unitsHtml ? `<div class="detail-h3">Best and worst lines and pairs</div>${unitsHtml}<div class="panel-caption">Units with at least 3:00 together, ranked by Unit Score. xGF&ndash;xGA shows how the chances went even where the score didn't. Every line and pair is under Lines &amp; special teams.</div>` : "",
           share: cardSection,
-          stDetail: stHtml ? `<div class="detail-h3">Special teams nights, unit by unit</div>${stHtml}<div class="panel-caption">Judged on the chances, not the score. "Typical" is the expected goals the league's average power play (8.2 per 60 minutes) makes from the same time. A power play that creates more than that, or a penalty kill that allows less, had a good night, even if nothing went in. Needs a minute of ice time to judge.</div>` : "" };
+          stDetail: stHtml ? `<div class="detail-h3">Special teams nights, unit by unit</div>${stHtml}<div class="panel-caption">Judged on the chances, not the score. "Typical" is the expected goals the league's average power play (8.1 per 60 minutes) makes from the same time. A power play that creates more than that, or a penalty kill that allows less, had a good night, even if nothing went in. Needs a minute of ice time to judge.</div>` : "" };
       })();
 
       // ---- tabs: one part of the page at a time

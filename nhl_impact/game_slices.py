@@ -30,7 +30,7 @@ SITUATIONS = ["5v5", "EV", "PP", "PK", "X"]
 HIGH_DANGER_XG = MEDIUM_DANGER_MAX  # same cutoffs as xg_model.danger_bucket
 
 # hdcf/hdca (on-ice high-danger chances for/against) are last so earlier positions never move
-# Danger bands are the chance a shot on goal scores (xg_model.predict_danger): low < 9%, medium 9-16%, high >= 16%.
+# Danger bands are the chance a shot on goal scores (xg_model.predict_danger): low < 7%, medium 7-14%, high >= 14%.
 # Everything new is appended so existing positions never move.
 PLAYER_FIELDS = ["toi", "g", "a1", "a2", "sog", "hits", "blk", "tk", "gv", "pim", "fow", "fol",
                  "pd", "pt", "ixg", "cf", "ca", "gf", "ga", "xgf", "xga", "hdcf", "hdca",
@@ -187,10 +187,13 @@ def compute_game_slices(conn, game_id: int, pipeline) -> dict:
             # danger "chances" are shots on goal (saves plus goals), the way most public sites count them; xG still
             # sums every unblocked attempt, misses included, because it is the chance of the attempt becoming a goal
             on_target = etype in ("goal", "shot-on-goal") and not empty_net
+            # expected goals in the cells are the chance a shot ON GOAL scores (0 for misses and empty-net attempts); `xg` (every unblocked
+            # attempt) only sizes the dots on the shot maps
+            cx = float(dp) if (on_target and dp is not None) else 0.0
             if xg is not None:
                 band = danger_band(dp)
-                bump_player(shooter, "ixg", xg)
-                bump_team(shooter_team, "xgf", xg)
+                bump_player(shooter, "ixg", cx)
+                bump_team(shooter_team, "xgf", cx)
                 if on_target:
                     bump_player(shooter, {"h": "ihd", "m": "imd", "l": "ild"}[band])
                     bump_player(shooter, {"h": "ihx", "m": "imx", "l": "ilx"}[band], float(dp) if dp is not None else xg)
@@ -214,7 +217,7 @@ def compute_game_slices(conn, game_id: int, pipeline) -> dict:
                         if etype == "goal":
                             row[_PI["gf"]] += 1
                         if xg is not None:
-                            row[_PI["xgf"]] += xg
+                            row[_PI["xgf"]] += cx
                             if on_target:
                                 row[_PI[{"h": "hdcf", "m": "mdcf", "l": "ldcf"}[band]]] += 1
                     else:
@@ -222,7 +225,7 @@ def compute_game_slices(conn, game_id: int, pipeline) -> dict:
                         if etype == "goal":
                             row[_PI["ga"]] += 1
                         if xg is not None:
-                            row[_PI["xga"]] += xg
+                            row[_PI["xga"]] += cx
                             if on_target:
                                 row[_PI[{"h": "hdca", "m": "mdca", "l": "ldca"}[band]]] += 1
 

@@ -33,3 +33,7 @@ private/
 scratch/
 METHODOLOGY.md
 models/predicted_value_weights.json
+
+# throwaway files used to create the Cloudflare Pages project
+placeholder/
+placeholder.zip

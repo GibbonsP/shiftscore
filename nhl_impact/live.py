@@ -108,6 +108,10 @@ def _status_text(sb_game: dict) -> str:
     return ""
 
 
+def _shot_xg(built: dict, side: int) -> float:
+    return sum((s[10] if s[10] is not None else s[5]) for s in built.get("shots", []) if s[2] == side and s[6] >= 1 and s[9] != 1)
+
+
 def _index_entry(sb_game: dict, built: dict | None) -> dict:
     away, home = sb_game["awayTeam"], sb_game["homeTeam"]
     entry = {
@@ -122,9 +126,10 @@ def _index_entry(sb_game: dict, built: dict | None) -> dict:
             return sum(c[idx] for c in ts.get(side, {}).values())
         entry.update(
             {
-                # TEAM_FIELDS positions: 2 = sog, 4 = xgf (see game_slices)
+                # TEAM_FIELDS position 2 = sog (see game_slices). Team xG counts shots on goal with the goalie in net, each worth the chance a shot
+                # on goal becomes a goal (shot row field 10, or field 5 on older rows): the same definition as the game page.
                 "sog": [team_total("away", 2), team_total("home", 2)],
-                "xg": [round(team_total("away", 4), 2), round(team_total("home", 4), 2)],
+                "xg": [round(_shot_xg(built, 0), 2), round(_shot_xg(built, 1), 2)],
                 "goals": [[g["label"], g["time"], g["team"], g["scorer"]] for g in built.get("goals", [])],
                 "no_shifts": built.get("ns", 0),
             }
