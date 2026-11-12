@@ -752,7 +752,7 @@ const GameView = (() => {
       const nums = (labels) => labels.map(label => ({ label, num: true }));
       const SK_HEADERS = {
         adv: [{ label: "Player" }, { label: "Pos" }, ...nums(["TOI", "Chances created", "ixG", "CF", "CA", "CF%", "xGF", "xGA", "xGF%", "HDCF", "HDCA", "MDCF", "MDCA", "LDCF", "LDCA", "GF", "GA", gsLabel, "QoC", "QoT", "Adjusted"])],
-        box: [{ label: "Player" }, { label: "Pos" }, ...nums(["TOI", "G", "A", "P", "SOG", "Hits", "Blk", "TK", "GV", "PIM", "FO W-L", "FO%", "Pen. drawn", "Pen. taken", "Starts OZ-DZ-NZ", "OZ%"])],
+        box: [{ label: "Player" }, { label: "Pos" }, ...nums(["TOI", "G", "A1", "A2", "P", "SOG", "Hits", "Blk", "TK", "GV", "PIM", "FO W-L", "FO%", "Pen. drawn", "Pen. taken", "Starts OZ-DZ-NZ", "OZ%"])],
         ch: [{ label: "Player" }, { label: "Pos" }, ...nums(["TOI", "Chances created", "Own: high", "med", "low", "xGF", "xGA", "HDCF", "HDCA", "MDCF", "MDCA", "LDCF", "LDCA", "HDCF%"])],
       };
       const skTable = (side) => {
@@ -764,7 +764,7 @@ const GameView = (() => {
           const who = [links.player(id, g[side], name), pos, toiStr(v.toi)];
           const toi = v.toi;
           if (state.view === "box") {
-            rows.push([...who, cnt(v.g, toi), cnt(v.a1 + v.a2, toi), cnt(v.g + v.a1 + v.a2, toi), cnt(v.sog, toi), cnt(v.hits, toi), cnt(v.blk, toi),
+            rows.push([...who, cnt(v.g, toi), cnt(v.a1, toi), cnt(v.a2, toi), cnt(v.g + v.a1 + v.a2, toi), cnt(v.sog, toi), cnt(v.hits, toi), cnt(v.blk, toi),
               cnt(v.tk, toi), cnt(v.gv, toi), cnt(v.pim, toi), `${v.fow}-${v.fol}`, pct(v.fow, v.fol), cnt(v.pd, toi), cnt(v.pt, toi),
               ...(filtered || !r[9] ? ["&ndash;", "&ndash;"] : [`${r[9][0]}-${r[9][1]}-${r[9][2]}`, pct(r[9][0], r[9][1])])]);
           } else if (state.view === "ch") {

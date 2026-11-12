@@ -701,14 +701,14 @@ function teamSkaterTablesHtml(data) {
   const playerTable = (list) => {
     const sorted = list.slice().sort((a, b) => b.p.summary.avg_adjusted - a.p.summary.avg_adjusted);
     return statTable(
-      [{ label: "#", num: true }, { label: "Player" }, { label: "Pos" }, ...["GP", "G", "A", "P", "TOI / GP", "xGF%", "Avg Game Score", "Avg Adjusted"].map(label => ({ label, num: true }))],
+      [{ label: "#", num: true }, { label: "Player" }, { label: "Pos" }, ...["GP", "G", "A1", "A2", "P", "TOI / GP", "xGF%", "Avg Game Score", "Avg Adjusted"].map(label => ({ label, num: true }))],
       sorted.map(({ pid, p, pos }, i) => { const s = p.summary;
-        return [i + 1, playerLink(pid, data.abbrev, p.name), pos, s.gp, s.goals, s.assists, s.points, s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;", pctOf(s.xgf, s.xga), scoreCell(s.avg_raw), gsCell(s.avg_adjusted, "avg", true)]; }));
+        return [i + 1, playerLink(pid, data.abbrev, p.name), pos, s.gp, s.goals, s.a1, s.a2, s.points, s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;", pctOf(s.xgf, s.xga), scoreCell(s.avg_raw), gsCell(s.avg_adjusted, "avg", true)]; }));
   };
   const fwd = players.filter(x => x.pos !== "D"), def = players.filter(x => x.pos === "D");
   const everyone = statTable(
-    [{ label: "Player" }, { label: "Pos" }, { label: "GP", num: true }, { label: "G", num: true }, { label: "A", num: true }, { label: "Avg Adj", num: true }],
-    data.roster.map(p => [playerLink(p.player_id, data.abbrev, p.name), p.position, p.gp, p.goals, p.assists, gsCell(p.avg_adjusted, "avg", true)])
+    [{ label: "Player" }, { label: "Pos" }, { label: "GP", num: true }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Avg Adj", num: true }],
+    data.roster.map(p => [playerLink(p.player_id, data.abbrev, p.name), p.position, p.gp, p.goals, p.a1, p.a2, gsCell(p.avg_adjusted, "avg", true)])
   );
   return `<div class="detail-h3">Forwards <span class="detail-sub">${minGp}+ games, by Avg Adjusted</span></div>${fwd.length ? playerTable(fwd) : '<div class="empty">No forwards with enough games yet.</div>'}
     <div class="detail-h3">Defensemen <span class="detail-sub">${minGp}+ games, by Avg Adjusted</span></div>${def.length ? playerTable(def) : '<div class="empty">No defensemen with enough games yet.</div>'}
@@ -895,7 +895,7 @@ function playerCardHtml(playerId, p, teamData) {
   const toiGp = s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;";
   const head = goalieRow
     ? [["GP", goalieRow.gp], ["Sv%", goalieRow.sv_pct != null ? goalieRow.sv_pct.toFixed(3) : "&ndash;"], ["GSAx", (goalieRow.gsax > 0 ? "+" : "") + goalieRow.gsax], ["SA", goalieRow.shots_faced]]
-    : [["GP", s.gp], ["G", s.goals], ["A", s.assists], ["P", s.points], ["TOI / GP", toiGp]];
+    : [["GP", s.gp], ["G", s.goals], ["A1", s.a1], ["A2", s.a2], ["P", s.points], ["TOI / GP", toiGp]];
   const groupsInOrder = [...new Set(c.m.map(m => m[0]))];
   // blue for a low percentile through a neutral grey in the middle to red for a high one
   const pctColor = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(72 - 23 * t).toFixed(0)}%)`; };
@@ -1014,9 +1014,9 @@ function playerDetailHtml(playerId, teamData, sec) {
   const goalieRowHere = (teamData.goalies || []).find(r => String(r.player_id) === String(playerId));
   const posHere = ((teamData.roster || []).find(r => String(r.player_id) === String(playerId)) || {}).position;   // raw Game Score is colored against his own position
   const summary = goalieRowHere || p.goalie_log ? goalieSummaryHtml(p, goalieRowHere) : statTable(
-    [{ label: "GP", num: true }, { label: "G", num: true }, { label: "A", num: true }, { label: "P", num: true },
+    [{ label: "GP", num: true }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "P", num: true },
      { label: "Avg Raw", num: true }, { label: "Avg Adjusted", num: true }, { label: "Total ixG", num: true }],
-    [[s.gp, s.goals, s.assists, s.points, gsCell(s.avg_raw, gsKind(posHere, true), false), gsCell(s.avg_adjusted, "avg", true), s.total_ixg]]
+    [[s.gp, s.goals, s.a1, s.a2, s.points, gsCell(s.avg_raw, gsKind(posHere, true), false), gsCell(s.avg_adjusted, "avg", true), s.total_ixg]]
   );
   // rates need a sample: an hour of ice time for the season, half an hour for a situation (power play, penalty kill)
   const per60 = (x) => (s.toi >= 3600 ? (x * 3600 / s.toi).toFixed(2) : "&ndash;");
@@ -1074,9 +1074,9 @@ function playerDetailHtml(playerId, teamData, sec) {
       ["Shots faced", "Goals allowed", "Sv%", "xGA", "GSAx"].map((label, k) => [label, ...cols.map(c => cell(c, k)), cell(tot, k)]));
   })() : "";
   const log = statTable(
-    [{ label: "Date" }, { label: "Team" }, { label: "G", num: true }, { label: "A", num: true }, { label: "Raw", num: true },
+    [{ label: "Date" }, { label: "Team" }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
      { label: "QoC", num: true }, { label: "QoT", num: true }, { label: "Adjusted", num: true }, { label: "ixG", num: true }],
-    p.game_log.map(g => [gameLink(g.gid, g.home, g.date), g.team, g.goals, g.assists, gsCell(g.raw, gsKind(posHere, false), false),
+    p.game_log.map(g => [gameLink(g.gid, g.home, g.date), g.team, g.goals, g.a1, g.a2, gsCell(g.raw, gsKind(posHere, false), false),
       g.qoc, g.qot, gsCell(g.adjusted, "adj", true), g.ixg])
   );
   const isGoalie = (teamData.goalies || []).some(g => String(g.player_id) === String(playerId));
@@ -1697,7 +1697,8 @@ const SKATER_COLS = [
   { k: "pos", label: "Pos", get: p => p.pos },
   { k: "gp", label: "GP", num: true, get: p => p.gp },
   { k: "g", label: "G", num: true, get: p => p.g ?? 0 },
-  { k: "a", label: "A", num: true, get: p => p.a ?? 0 },
+  { k: "a1", label: "A1", num: true, get: p => p.a1 ?? 0 },
+  { k: "a2", label: "A2", num: true, get: p => (p.a ?? 0) - (p.a1 ?? 0) },
   { k: "pts", label: "P", num: true, get: p => (p.g ?? 0) + (p.a ?? 0) },
   { k: "sog", label: "SOG", num: true, get: p => p.sog ?? 0 },
   { k: "toi_gp", label: "TOI / GP", num: true, get: p => (p.gp ? (p.toi_sec ?? 0) / p.gp : 0), cell: p => toiStr(Math.round(p.gp ? (p.toi_sec ?? 0) / p.gp : 0)) },
@@ -2105,6 +2106,7 @@ const GLOSSARY = {
   "hd": TIP_DANGER("High", "with a 14% or better chance of scoring") + " Shown as shots for\u2013against.",
   "md": TIP_DANGER("Medium", "with a 7\u201314% chance of scoring") + " Shown as shots for\u2013against.",
   "ld": TIP_DANGER("Low", "with under a 7% chance of scoring") + " Shown as shots for\u2013against.",
+  "a1": "Primary assists: the last pass before a goal.", "a2": "Secondary assists: the pass before the primary assist.",
   "sog": "Shots on goal (saves plus goals).", "soga": "Shots on goal against.", "pp goals": "Power-play goals for\u2013against.",
   "d pair": "The defense pair with the best Unit Score that night (at least 3:00 together).",
   "forward line": "The forward line with the best Unit Score that night (at least 3:00 together).",

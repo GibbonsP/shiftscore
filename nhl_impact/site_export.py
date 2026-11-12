@@ -152,19 +152,20 @@ def _player_summary_and_log(conn, player_id, home_by_game):
                   SUM(faceoff_wins), SUM(faceoff_losses), SUM(penalties_drawn), SUM(penalties_taken), SUM(blocks),
                   SUM(mdcf_all), SUM(mdca_all), SUM(ldcf_all), SUM(ldca_all),
                   SUM(hdgf_all), SUM(hdga_all), SUM(mdgf_all), SUM(mdga_all), SUM(ldgf_all), SUM(ldga_all),
-                  SUM(hdxgf_all), SUM(hdxga_all), SUM(mdxgf_all), SUM(mdxga_all), SUM(ldxgf_all), SUM(ldxga_all)
+                  SUM(hdxgf_all), SUM(hdxga_all), SUM(mdxgf_all), SUM(mdxga_all), SUM(ldxgf_all), SUM(ldxga_all),
+                  SUM(primary_assists)
            FROM player_game_stats WHERE player_id = ?""",
         (player_id,),
     ).fetchone()
     (gp, goals, assists, shots, avg_raw, total_ixg, hits, tk, gv, pim, toi, oz, dz, nz, fly,
      cf, ca, xgf, xga, hdcf, hdca, fow, fol, pd, pt, blk, mdcf, mdca, ldcf, ldca,
-     hdgf, hdga, mdgf, mdga, ldgf, ldga, hdxgf, hdxga, mdxgf, mdxga, ldxgf, ldxga) = (v or 0 for v in totals)
+     hdgf, hdga, mdgf, mdga, ldgf, ldga, hdxgf, hdxga, mdxgf, mdxga, ldxgf, ldxga, a1) = (v or 0 for v in totals)
     avg_adj = (
         conn.execute("SELECT AVG(adjusted_impact) FROM player_game_impact WHERE player_id = ?", (player_id,)).fetchone()[0]
         or 0
     )
     summary = {
-        "gp": gp, "goals": goals, "assists": assists, "points": goals + assists, "shots": shots,
+        "gp": gp, "goals": goals, "assists": assists, "a1": int(a1), "a2": int(assists - a1), "points": goals + assists, "shots": shots,
         "avg_raw": round(avg_raw, 2), "avg_adjusted": round(avg_adj, 2), "total_ixg": round(total_ixg, 1),
         "hits": hits, "takeaways": tk, "giveaways": gv, "pim": pim,
         "toi": int(toi), "oz": int(oz), "dz": int(dz), "nz": int(nz), "fly": int(fly),
@@ -178,6 +179,7 @@ def _player_summary_and_log(conn, player_id, home_by_game):
     log = rows(
         conn,
         f"""SELECT gm.game_date AS date, t.abbrev AS team, pgs.goals, pgs.primary_assists + pgs.secondary_assists AS assists,
+                  pgs.primary_assists AS a1, pgs.secondary_assists AS a2,
                   ROUND(pgi.raw_game_score,2) AS raw, ROUND(pgi.qoc,2) AS qoc, ROUND(pgi.qot,2) AS qot,
                   ROUND(pgi.adjusted_impact,2) AS adjusted, ROUND(pgs.ixg,2) AS ixg, gm.game_id AS gid
            FROM player_game_impact pgi
@@ -261,6 +263,7 @@ def team_shards(conn, units: list[dict]) -> tuple[dict, list, list, dict]:
             conn,
             """SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.position, COUNT(*) gp,
                       SUM(pgs.goals) goals, SUM(pgs.primary_assists + pgs.secondary_assists) assists,
+                      SUM(pgs.primary_assists) a1, SUM(pgs.secondary_assists) a2,
                       ROUND(AVG(pgi.adjusted_impact),2) avg_adjusted
                FROM player_game_stats pgs
                JOIN players p ON p.player_id = pgs.player_id
@@ -343,16 +346,16 @@ def team_shards(conn, units: list[dict]) -> tuple[dict, list, list, dict]:
 
     # every skater with the season totals the Skaters table shows
     players_index = []
-    for pid, name, pos, gp, g, a, sog, toi, ixg, avg_raw, avg_adj in conn.execute(
+    for pid, name, pos, gp, g, a, a1, sog, toi, ixg, avg_raw, avg_adj in conn.execute(
         """SELECT p.player_id, p.first_name||' '||p.last_name, p.position, COUNT(*), SUM(pgs.goals), SUM(pgs.primary_assists + pgs.secondary_assists),
-                  SUM(pgs.shots), SUM(pgs.toi_sec), ROUND(SUM(pgs.ixg),1),
+                  SUM(pgs.primary_assists), SUM(pgs.shots), SUM(pgs.toi_sec), ROUND(SUM(pgs.ixg),1),
                   (SELECT ROUND(AVG(i.raw_game_score),2) FROM player_game_impact i WHERE i.player_id = p.player_id),
                   (SELECT ROUND(AVG(i.adjusted_impact),2) FROM player_game_impact i WHERE i.player_id = p.player_id)
            FROM player_game_stats pgs JOIN players p ON p.player_id=pgs.player_id
            WHERE p.position != 'G' GROUP BY p.player_id"""
     ):
         players_index.append({"id": pid, "name": name, "pos": pos, "team": primary_team.get(pid, (0, "?"))[1], "gp": gp,
-                              "g": g or 0, "a": a or 0, "sog": sog or 0, "toi_sec": toi or 0, "ixg": ixg or 0,
+                              "g": g or 0, "a": a or 0, "a1": a1 or 0, "sog": sog or 0, "toi_sec": toi or 0, "ixg": ixg or 0,
                               "avg_raw": avg_raw, "avg_adj": avg_adj})
     return shards, teams_index, players_index, unit_shards
 
