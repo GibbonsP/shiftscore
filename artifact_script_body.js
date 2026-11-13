@@ -1126,6 +1126,8 @@ const gameViewLinks = {
   playerText: playerTextLink,
   team: teamLink,
   unit: unitLink,
+  unitFaces,
+  unitPageLink: (key, team, text) => `<a class="row-link" title="Open this unit's page" data-open-unit="${key}" data-unit-team="${team}">${text}</a>`,
 };
 function gamesListHtml(filterText) {
   const q = (filterText || "").trim().toLowerCase();

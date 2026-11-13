@@ -894,7 +894,13 @@ const GameView = (() => {
         u[10], u[11], u[14] || 0, u[15] || 0, u[16] || 0, u[17] || 0, scoreCell(u[12])];
       const otherRow = (o) => [`<span class="detail-sub">All other combinations (${o[2]})</span>`, toiStr(o[3]), o[4], o[5], o[6], o[7], o[8].toFixed(2), o[9].toFixed(2),
         o[10], o[11], o[12], o[13], o[14], o[15], scoreCell(o[16])];
-      const unitText = (u) => { const text = u[3].map(id => names[id] || id).join(", "); return u[13] ? links.unit(u[13], u[0], text) : escapeHtml(text); };
+      // each player's name opens his page; a "unit" link after the names opens the unit's page (on the hosted site; the live view has no pages)
+      const unitText = (u) => {
+        const text = u[3].map(id => names[id] || id).join(", "), key = u[13];
+        if (!key || !links.unitPageLink) return key ? links.unit(key, u[0], text) : escapeHtml(text);
+        const who = u[3].map(id => (links.playerText || links.player)(id, u[0], names[id] || id)).join(", ");
+        return (links.unitFaces ? links.unitFaces(key, text) : "") + who + ` <span class="detail-sub">${links.unitPageLink(key, u[0], "unit &rsaquo;")}</span>`;
+      };
       // table rows for one team's units of one kind in the given periods (null = whole game), longest on the ice first
       const unitBody = (type, periods, team) => {
         const rows = g.units.filter(u => u[1] === type && u[0] === team).map(u => unitInPeriods(u, periods)).filter(Boolean).sort((a, b) => b[2] - a[2]);
