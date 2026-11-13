@@ -445,7 +445,7 @@ function unitDetailHtml(data, key) {
     ${back}
     <div class="detail-title">${escapeHtml(title)} <span class="detail-sub">${data.abbrev} &middot; ${UNIT_LABEL_SINGULAR[u.type]}</span></div>
     <div class="panel-caption">${names}</div>
-    <div class="panel-caption">Unit Score counts the goals and expected goals this unit scored and allowed over its time together in each game. It's a running count, so more ice time means a bigger swing &mdash; Score / 60 normalizes for that.</div>
+    <div class="panel-caption">Unit Score counts the expected goals, goals and shot attempts this unit earned and allowed over its time together in each game. It's a running count, so more ice time means a bigger swing &mdash; Score / 60 normalizes for that.</div>
     <div class="detail-h3">Season Summary</div>${summary}
     <div class="detail-h3">Shot danger</div>${dangerCard}
     <div class="panel-caption">Shots on goal for and against while this unit was on the ice, by how likely each shot was to score, with the goals and expected goals (xG) from them. Under shots for, green means more goals than the shots were worth; under shots against, green means fewer goals allowed than expected. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
@@ -731,7 +731,7 @@ function teamUnitRankHtml(data) {
   };
   return `<div class="detail-h3">Best forward lines <span class="detail-sub">by Rating / 60</span></div>${unitTable("line")}
     <div class="detail-h3">Best defense pairs <span class="detail-sub">by Rating / 60</span></div>${unitTable("pair")}
-    <div class="panel-caption">Rating / 60 is the Unit Score earned per 60 minutes together (goals for and against plus expected goals for and against), pulled toward zero for units with little time together, since a rate over a few dozen minutes is mostly luck. Raw / 60 is the unadjusted rate. Units need 30 minutes together (10 when the team has fewer than three that qualify).</div>`;
+    <div class="panel-caption">Rating / 60 is the Unit Score earned per 60 minutes together (expected goals for and against, plus goals and shot attempts), pulled toward zero for units with little time together, since a rate over a few dozen minutes is mostly luck. Raw / 60 is the unadjusted rate. Units need 30 minutes together (10 when the team has fewer than three that qualify).</div>`;
 }
 
 // --- the team page: a header with the season's key numbers and league ranks, then one section at a time
@@ -1986,7 +1986,7 @@ const HOW_IT_WORKS_HTML = `
 
   <h3>Lines, pairs, power play &amp; penalty kill</h3>
   <p>At even strength each team's skaters split into a forward line (3) and a D pair (2); on the power play and penalty kill the whole on-ice group is one unit. Each combination's score for a game counts the goals and the expected goals it scored and allowed while it was on the ice.</p>
-  <p>Raw shot attempts are excluded on purpose: a line is together about a minute at a time, so goals and raw shots let one bounce dominate. Unit Score is a running count over the time the unit shared the ice, so use <strong>Score / 60</strong> to compare units with different ice time. Every unit with a meaningful season sample has its own page &mdash; open any team and scroll to its lines, pairs and special-teams units. Lines and pairs need 10+ minutes together on the season, PP/PK units 3+ minutes; shorter combinations are mostly one-off deployments from injuries or penalties ending mid-shift.</p>
+  <p>For forward lines and defense pairs, expected goals carry the score and goals and shot attempts count for less, because a line is together about a minute at a time and a single bounce shouldn't decide its night. Unit Score is a running count over the time the unit shared the ice, so use <strong>Score / 60</strong> to compare units with different ice time. Every unit with a meaningful season sample has its own page &mdash; open any team and scroll to its lines, pairs and special-teams units. Lines and pairs need 10+ minutes together on the season, PP/PK units 3+ minutes; shorter combinations are mostly one-off deployments from injuries or penalties ending mid-shift.</p>
 
   <h3>Game pages</h3>
   <p>Every game has a box score page: score by period, scoring and penalty summaries, team stats (shots, shot attempts, expected goals, high-danger shots on goal, hits, faceoffs, power-play time), every skater's line with their Game Score, QoC, QoT and Adjusted Impact for that night, both goalies with GSAx, and the scores of every line, pair and special-teams unit that played real minutes. Shootouts are not counted as goals for any player or stat; the shootout winner is credited one goal in the final score, as in the official box score.</p>
@@ -2074,7 +2074,7 @@ function selectTab(key) {
 const TIP_AVG = "A per-game average over the season. ";
 const TIP_RAW = "Game Score as it came: points for goals, assists, shots, blocks, faceoffs and penalties, plus how the team did while he was on the ice (shot attempts, goals, expected goals). No adjustments.";
 const TIP_ADJ = "Raw Game Score plus credit for tougher opponents (QoC), minus the average for his position, so 0 is a typical forward or defenseman. This is the number to compare players on.";
-const TIP_UNIT = "Unit Score counts the goals and expected goals the unit scored and allowed over the time it was together. Positive is a good night.";
+const TIP_UNIT = "Unit Score counts the expected goals, goals and shot attempts the unit earned and allowed over the time it was together. Positive is a good night.";
 const TIP_DANGER = (band, rule) => `${band} danger: shots on goal ${rule} (low under 7%, medium 7–14%, high 14%+), from the shot-quality model. HDCF / HDGF style counts are chances for and goals that went in.`;
 const GLOSSARY = {
   "raw": TIP_RAW, "game score": TIP_RAW, "game score*": TIP_RAW,

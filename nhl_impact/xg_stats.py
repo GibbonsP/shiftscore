@@ -4,7 +4,7 @@ from . import gamescore
 from .adjustments import shot_weight
 from .shifts import group_by_period, on_ice_at
 from .shot_features import extract_game_shot_rows
-from .units import UNIT_WEIGHTS, _skaters_only, team_units
+from .units import _skaters_only, team_units, unit_score
 from .xg_model import danger_bucket, predict_danger, predict_xg
 
 DANGER_FOR_COLS = {"high": "hdcf", "medium": "mdcf", "low": "ldcf"}
@@ -195,13 +195,13 @@ def _apply_unit_period_stats(conn, game_id: int, unit_period_acc: dict) -> None:
     for (team_id, unit_type, player_ids, period), stats in unit_period_acc.items():
         key = ",".join(str(p) for p in sorted(player_ids))
         row = conn.execute(
-            "SELECT gf, ga FROM unit_period_stats WHERE game_id=? AND team_id=? AND unit_type=? AND player_ids=? AND period=?",
+            "SELECT gf, ga, cf, ca FROM unit_period_stats WHERE game_id=? AND team_id=? AND unit_type=? AND player_ids=? AND period=?",
             (game_id, team_id, unit_type, key, period),
         ).fetchone()
         if row is None:
             continue
-        gf, ga = row
-        score = gf * UNIT_WEIGHTS["gf"] + ga * UNIT_WEIGHTS["ga"] + UNIT_WEIGHTS["xgf_adjusted"] * stats.get("xgf_adjusted", 0) + UNIT_WEIGHTS["xga_adjusted"] * stats.get("xga_adjusted", 0)
+        gf, ga, cf, ca = row
+        score = unit_score(unit_type, {"gf": gf, "ga": ga, "cf": cf, "ca": ca, "xgf_adjusted": stats.get("xgf_adjusted", 0), "xga_adjusted": stats.get("xga_adjusted", 0)})
         conn.execute(
             """UPDATE unit_period_stats SET xgf = ?, xga = ?, hdcf = ?, hdca = ?, mdcf = ?, mdca = ?, ldcf = ?, ldca = ?, unit_score = ?
                WHERE game_id = ? AND team_id = ? AND unit_type = ? AND player_ids = ? AND period = ?""",
@@ -222,7 +222,7 @@ def _apply_unit_stats(conn, game_id: int, unit_acc: dict) -> None:
             continue  # every xG-scored shot is also a Corsi event, so this shouldn't happen
         base = dict(zip(["cf", "ca", "gf", "ga"], row))
         full_stats = {**base, **stats}
-        new_score = sum(UNIT_WEIGHTS.get(k, 0) * full_stats.get(k, 0) for k in set(UNIT_WEIGHTS) | set(stats))
+        new_score = unit_score(unit_type, full_stats)
 
         conn.execute(
             """UPDATE unit_game_stats SET

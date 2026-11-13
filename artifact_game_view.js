@@ -36,8 +36,8 @@ const GS_CUTS = {
 // same percentiles (5, 20, 40, 60, 80, 95) as the Game Score colors, measured within each slot over every game since 2024-25 so a fourth
 // line is judged against fourth lines. Re-measure now and then (scratch/unit_cuts.py).
 const UNIT_CUTS = {
-  L1: [-1.32, -0.79, -0.02, 0.17, 1.1, 2.15], L2: [-1.32, -0.82, -0.05, 0.09, 0.98, 1.91], L3: [-1.29, -0.89, -0.05, 0.05, 0.88, 1.33], L4: [-1.23, -0.25, -0.05, 0.02, 0.15, 1.17],
-  P1: [-2.01, -0.99, -0.09, 0.17, 1.1, 2.23], P2: [-2.11, -1.05, -0.12, 0.1, 1.04, 2.09], P3: [-2.01, -1.05, -0.11, 0.05, 0.86, 1.46],
+  L1: [-1.46, -0.65, -0.05, 0.45, 1.09, 2.0], L2: [-1.49, -0.69, -0.17, 0.31, 0.84, 1.72], L3: [-1.39, -0.67, -0.2, 0.19, 0.71, 1.52], L4: [-1.27, -0.62, -0.21, 0.1, 0.5, 1.18],
+  P1: [-1.93, -0.93, -0.25, 0.39, 1.1, 2.15], P2: [-1.92, -0.98, -0.32, 0.26, 0.91, 1.94], P3: [-1.73, -0.9, -0.32, 0.14, 0.73, 1.62],
 };
 const unitTier = (v, slot) => { const cuts = UNIT_CUTS[slot]; let t = 0; while (t < cuts.length && v >= cuts[t]) t += 1; return t; };
 const GS_TIER_NAME = ["Awful", "Poor", "Below average", "Average", "Good", "Great", "Elite"];
@@ -540,7 +540,7 @@ const GameView = (() => {
       ${key}
       ${["Lines and pairs are the exact groups on the ice together at even strength, ranked by time together this game.",
         "Power-play and penalty-kill units are not included (they are under Lines & special teams on the game page).",
-        "Unit Score: how the unit did on goals and chances while together; 0 is an average game. GF-GA: goals for and against.",
+        "Unit Score: how the unit did on chances, goals and shots while together; 0 is an average game. GF-GA: goals for and against.",
         "xGF-xGA: expected goals for and against. Grade: where the Unit Score falls among every line or pair in that slot,",
         "top 5% elite, bottom 5% awful. One game is a small sample.  Source: NHL play-by-play and shift data."]
         .map((t, k) => `<text x="56" y="${H - 108 + k * 22}" font-size="15" fill="${CARD.muted}" ${font}>${esc(t)}</text>`).join("")}

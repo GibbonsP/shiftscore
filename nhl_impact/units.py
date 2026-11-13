@@ -12,6 +12,17 @@ FORWARD_POSITIONS = {"L", "C", "R"}
 from .formulas import FORMULAS
 
 UNIT_WEIGHTS = dict(FORMULAS["unit_weights"])
+# Forward lines and defense pairs (even strength) use their own weights, chosen by how well a unit's score in some games predicted its other
+# games (METHODOLOGY.md, "Unit Score recipe"): expected goals carry the score, goals count for less, raw shot attempts a little. Power-play,
+# penalty-kill and 4-on-4 / 3-on-3 units were not part of that test and keep UNIT_WEIGHTS.
+UNIT_WEIGHTS_EV = dict(FORMULAS["unit_weights_ev"])
+EVEN_STRENGTH_UNITS = {"line", "pair"}
+
+
+def unit_score(unit_type: str, stats: dict) -> float:
+    """Unit Score for one unit over some stretch of play. stats has gf, ga, cf, ca, xgf_adjusted, xga_adjusted (missing counts as 0)."""
+    w = UNIT_WEIGHTS_EV if unit_type in EVEN_STRENGTH_UNITS else UNIT_WEIGHTS
+    return sum(w[k] * stats.get(k, 0) for k in w)
 
 
 def team_states(situation_code: str | None) -> tuple[str, str]:
@@ -161,7 +172,7 @@ def compute_game_units(conn, game_id: int) -> None:
     for (team_id, unit_type, player_ids), stats in acc.items():
         if not player_ids or stats.get("toi_sec", 0) <= 0:
             continue
-        score = sum(UNIT_WEIGHTS[k] * stats.get(k, 0) for k in UNIT_WEIGHTS)
+        score = unit_score(unit_type, stats)
         conn.execute(
             """INSERT OR REPLACE INTO unit_game_stats
                (game_id, team_id, unit_type, player_ids, toi_sec, cf, ca, gf, ga, unit_score)
@@ -192,7 +203,7 @@ def compute_game_units(conn, game_id: int) -> None:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (game_id, team_id, unit_type, ",".join(str(p) for p in sorted(player_ids)), period,
              stats.get("toi_sec", 0), stats.get("cf", 0), stats.get("ca", 0), stats.get("gf", 0), stats.get("ga", 0),
-             sum(UNIT_WEIGHTS[k] * stats.get(k, 0) for k in UNIT_WEIGHTS)),
+             unit_score(unit_type, stats)),
         )
 
     conn.commit()
