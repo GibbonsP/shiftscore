@@ -1058,9 +1058,12 @@ const GameView = (() => {
       // ---- tabs: one part of the page at a time
       const hasOTtab = !!otSection;
       if (state.tab === "ot" && !hasOTtab) state.tab = "summary";
+      // the game card is for a finished game: no tab while the game is in play
+      const inPlay = !!(g.live && (g.live.state === "LIVE" || g.live.state === "CRIT"));
+      if (state.tab === "share" && inPlay) state.tab = "summary";
       const tab = state.tab || "summary";
       const TABS_GV = [["summary", "Summary"], ["skaters", "Skaters"], ["units", "Lines & special teams"], ["shots", "Shots & goalies"],
-        ...(hasOTtab ? [["ot", "Overtime"]] : []), ["share", "Game card"]];
+        ...(hasOTtab ? [["ot", "Overtime"]] : []), ...(inPlay ? [] : [["share", "Game card"]])];
       navEl.innerHTML = TABS_GV.map(([k, label]) => `<button type="button" role="tab" class="chip" aria-pressed="${tab === k}" aria-selected="${tab === k}" data-gv-tab="${k}">${label}</button>`).join("");
       // the filters only mean something on the tabs whose numbers they change
       renderFilters();
