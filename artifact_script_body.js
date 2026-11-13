@@ -1602,6 +1602,7 @@ function renderLiveGame(host) {
     if (!snap.exists) { host.innerHTML = liveLinks.backHtml + '<div class="empty">No live data for this game yet.</div>'; return; }
     const game = snap.data().game;
     if (!game) return;
+    padGameShard({ g: game });   // live documents drop trailing zeros from cells just like the game shards
     if (LIVE.view && host.querySelector(".gv-body")) LIVE.view.update(game);
     else LIVE.view = GameView.mount(host, game, liveLinks);
   }, () => { host.innerHTML = liveLinks.backHtml + '<div class="empty">Couldn\'t load that game.</div>'; });

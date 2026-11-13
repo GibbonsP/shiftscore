@@ -123,7 +123,7 @@ def _index_entry(sb_game: dict, built: dict | None) -> dict:
     if built:
         ts = built.get("tc", {})
         def team_total(side, idx):
-            return sum(c[idx] for c in ts.get(side, {}).values())
+            return sum((c[idx] if len(c) > idx else 0) for c in ts.get(side, {}).values())
         entry.update(
             {
                 # TEAM_FIELDS position 2 = sog (see game_slices). Team xG counts shots on goal with the goalie in net, each worth the chance a shot
@@ -210,7 +210,7 @@ def tick(date: str | None = None, model_path: str = "models/xg_model.joblib", fo
         pd, clock = g.get("periodDescriptor") or {}, g.get("clock") or {}
         b["live"] = {"state": g.get("gameState"), "status": _status_text(g), "updated": index["updated"]}
         # a game's doc changes when its state, score, period/clock, or event count does
-        n_events = sum(c[1] for side in b.get("tc", {}).values() for c in side.values())
+        n_events = sum((c[1] if len(c) > 1 else 0) for side in b.get("tc", {}).values() for c in side.values())
         sig = [g.get("gameState"), away.get("score"), home.get("score"), pd.get("number"), clock.get("timeRemaining"), n_events]
         write(f"g_{g['id']}", {"game": b, "updated": index["updated"]}, sig)
 
