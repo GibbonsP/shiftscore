@@ -17,11 +17,14 @@ UNIT_WEIGHTS = dict(FORMULAS["unit_weights"])
 # penalty-kill and 4-on-4 / 3-on-3 units were not part of that test and keep UNIT_WEIGHTS.
 UNIT_WEIGHTS_EV = dict(FORMULAS["unit_weights_ev"])
 EVEN_STRENGTH_UNITS = {"line", "pair"}
+# Penalty-kill units got the same kind of recipe on 2026-11-13 (xG leads; their own scale), tested the same way on penalty kills. Power-play
+# units were tested too and kept UNIT_WEIGHTS (goals carry real signal on the power play); 4-on-4 and 3-on-3 units were not tested.
+UNIT_WEIGHTS_PK = dict(FORMULAS["unit_weights_pk"])
 
 
 def unit_score(unit_type: str, stats: dict) -> float:
     """Unit Score for one unit over some stretch of play. stats has gf, ga, cf, ca, xgf_adjusted, xga_adjusted (missing counts as 0)."""
-    w = UNIT_WEIGHTS_EV if unit_type in EVEN_STRENGTH_UNITS else UNIT_WEIGHTS
+    w = UNIT_WEIGHTS_EV if unit_type in EVEN_STRENGTH_UNITS else UNIT_WEIGHTS_PK if unit_type == "pk" else UNIT_WEIGHTS
     return sum(w[k] * stats.get(k, 0) for k in w)
 
 
