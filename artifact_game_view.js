@@ -484,66 +484,215 @@ const GameView = (() => {
       <text x="56" y="474" font-size="30" font-weight="800" fill="${CARD.ink}" ${font}>${esc(team)} skaters <tspan font-weight="400" font-size="20" fill="${CARD.muted}">vs ${esc(opp)}</tspan></text>
       ${heads}${body}${scoreKey}${summary}${dangerBlock}
       <text x="56" y="${H - 84}" font-size="15" fill="${CARD.muted}" ${font}>H-M-L: his own shots on goal that were high, medium and low danger.  HD +/-: high-danger shots on goal for minus against while he was on.</text>
-      <text x="56" y="${H - 62}" font-size="15" fill="${CARD.muted}" ${font}>Game Score is Adjusted: raw plus credit for the competition faced, minus the average for his position (0 is average).  xGF%: the team's share of expected goals with him on the ice.${rows.some(r => r.est) ? "  * estimated so far." : ""}</text>
+      <text x="56" y="${H - 62}" font-size="15" fill="${CARD.muted}" ${font}>Game Score is Adjusted: raw plus credit for the competition, minus his position's average (0 is average).  xGF%: team's xG share while he's on.${rows.some(r => r.est) ? "  * estimated so far." : ""}</text>
       <text x="56" y="${H - 40}" font-size="15" fill="${CARD.muted}" ${font}>Shot-quality odds ignore the goalie and score effects.  Source: NHL play-by-play and shift data.</text>
-      <text x="56" y="${H - 18}" font-size="15" fill="${CARD.muted}" ${font}>Goalie grade: goals saved above expected over the game. Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse.</text>
+      <text x="56" y="${H - 18}" font-size="15" fill="${CARD.muted}" ${font}>Goalie grade (goals saved above expected): Great over +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse.</text>
     </svg>`;
   }
-  // ---- lines and pairs card: one team's four forward lines and three defense pairs, ranked by ice time that game, each with its
-  // Unit Score and a grade against the same slot in every game since 2024-25 (percentile tiers, colored like the Game Score tiers)
+  // ---- the card set for a finished game: a table of every skater for both teams, a Game Score bar graph per team, and the lines, pairs and
+  // goalie grades per team. (The full game card, with shot danger and special teams, is still on the game page.) Shared building blocks first.
+  const CARD_FONT = 'font-family="Helvetica Neue, Helvetica, Arial, sans-serif"';
+  const cardStatus = (g) => ((g.live && (g.live.state === "LIVE" || g.live.state === "CRIT")) ? (g.live.status || "LIVE") : g.oc === "REG" ? "FINAL" : "FINAL/" + g.oc);
+  // one team's skaters with their stats and Game Score, best first (the same numbers as the full game card)
+  function cardSkaterRows(g, side) {
+    const rows = [];
+    g.sk[side].forEach(r => {
+      const v = named(sum(r[8], PF, [0, 1, 2, 3], [0, 1, 2, 3, 4]), PF);
+      if (!v.toi && !v.g && !v.sog) return;
+      const hasAdj = r[6] !== null && r[6] !== undefined, hasRaw = r[3] !== null && r[3] !== undefined;
+      // r[10]: [offense, defense, faceoffs and penalties] points; with the competition / position adjustment (adj - raw) they add up to the Adjusted score
+      const parts = hasAdj && hasRaw && Array.isArray(r[10]) ? [r[10][0], r[10][1], r[10][2], r[6] - r[3]] : null;
+      rows.push({ name: r[1], pos: r[2], v, parts, score: hasAdj ? r[6] : (hasRaw ? r[3] : sliceScore(v)), est: !hasAdj && !hasRaw });
+    });
+    return rows.sort((a, b) => b.score - a.score);
+  }
+  // the band at the top of a card about one team: logo, title, the score from that team's side, and a line about what the card shows
+  function cardTeamHeader(g, side, logoUri, title, sub) {
+    const team = g[side], opp = side === "away" ? g.home : g.away, esc = escapeHtml, font = CARD_FONT;
+    const mine = side === "away" ? g.as : g.hs, theirs = side === "away" ? g.hs : g.as;
+    const logo = logoUri && logoUri[team] ? `<image href="${logoUri[team]}" x="56" y="92" width="130" height="130" preserveAspectRatio="xMidYMid meet"/>` : `<text x="121" y="180" text-anchor="middle" font-size="44" font-weight="800" fill="${CARD.accent}" ${font}>${esc(team)}</text>`;
+    return `<rect width="1080" height="250" fill="${CARD.band}"/>
+      ${cardMark(48, 14, 56)}<text x="136" y="62" font-size="26" font-weight="800" letter-spacing="4" fill="${CARD.accent}" ${font}>SHIFT SCORE</text>
+      <text x="1032" y="62" text-anchor="end" font-size="24" fill="${CARD.muted}" ${font}>${esc(g.date || "")}</text>
+      ${logo}
+      <text x="210" y="150" font-size="46" font-weight="800" fill="${CARD.ink}" ${font}>${esc(title)}</text>
+      <text x="210" y="196" font-size="26" fill="${CARD.muted}" ${font}>${esc(team)} ${mine}, ${esc(opp)} ${theirs} &#183; ${esc(cardStatus(g))} &#183; ${g.away} at ${g.home}</text>
+      <text x="210" y="232" font-size="20" fill="${CARD.muted}" ${font}>${esc(sub)}</text>`;
+  }
+  // the band at the top of a card about the whole game (both logos, the score, expected score, verdict and win odds)
+  function cardTopBand(g, logoUri) {
+    const font = CARD_FONT, esc = escapeHtml, verdict = cardVerdict(g, g.shots || []);
+    const xa = teamXg(g.shots, 0), xh = teamXg(g.shots, 1), wa = Math.round(100 * verdict.wa), wh = 100 - wa;
+    const logo = (abbr, x) => (logoUri && logoUri[abbr] ? `<image href="${logoUri[abbr]}" x="${x}" y="108" width="130" height="130" preserveAspectRatio="xMidYMid meet"/>` : `<text x="${x + 65}" y="196" text-anchor="middle" font-size="44" font-weight="800" fill="${CARD.accent}" ${font}>${esc(abbr)}</text>`);
+    return `<rect width="1080" height="430" fill="${CARD.band}"/>
+      ${cardMark(48, 14, 56)}<text x="136" y="62" font-size="26" font-weight="800" letter-spacing="4" fill="${CARD.accent}" ${font}>SHIFT SCORE</text>
+      <text x="1032" y="62" text-anchor="end" font-size="24" fill="${CARD.muted}" ${font}>${esc(g.date || "")}</text>
+      ${logo(g.away, 56)}${logo(g.home, 894)}
+      <text x="372" y="214" text-anchor="middle" font-size="124" font-weight="800" fill="${CARD.ink}" ${font}>${g.as}</text>
+      <text x="540" y="200" text-anchor="middle" font-size="56" fill="${CARD.muted}" ${font}>&#8211;</text>
+      <text x="708" y="214" text-anchor="middle" font-size="124" font-weight="800" fill="${CARD.ink}" ${font}>${g.hs}</text>
+      <text x="540" y="262" text-anchor="middle" font-size="24" letter-spacing="3" fill="${CARD.muted}" ${font}>${esc(g.away)} AT ${esc(g.home)} &#183; ${esc(cardStatus(g))}</text>
+      <text x="540" y="312" text-anchor="middle" font-size="30" fill="${CARD.ink}" ${font}>Expected score (xG)  <tspan font-weight="800">${xa.toFixed(1)} &#8211; ${xh.toFixed(1)}</tspan></text>
+      <text x="540" y="356" text-anchor="middle" font-size="28" font-weight="700" fill="${CARD.accent}" ${font}>${esc(verdict.text)}</text>
+      <rect x="56" y="374" width="${(968 * verdict.wa).toFixed(1)}" height="10" rx="5" fill="${CARD.accent}"/>
+      <rect x="${(56 + 968 * verdict.wa).toFixed(1)}" y="374" width="${(968 * verdict.wh).toFixed(1)}" height="10" rx="5" fill="${CARD.muted}"/>
+      <text x="56" y="414" font-size="17" fill="${CARD.muted}" ${font}>${esc(g.away)} ${wa}%</text>
+      <text x="1024" y="414" text-anchor="end" font-size="17" fill="${CARD.muted}" ${font}>${wh}% ${esc(g.home)}  chance to win on shot quality</text>`;
+  }
+  // the color key for the seven tiers, on one line at y
+  function cardTierKey(y, label, what) {
+    const font = CARD_FONT, keyX = [250, 336, 410, 540, 652, 724, 806];
+    return `<text x="56" y="${y + 5}" font-size="13" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${label}</text>`
+      + GS_TIER_NAME.map((n, i) => `<circle cx="${keyX[i]}" cy="${y}" r="7" fill="${GS_CARD_COLORS[i]}"/><text x="${keyX[i] + 13}" y="${y + 5}" font-size="15" fill="${CARD.muted}" ${font}>${n}</text>`).join("")
+      + (what ? `<text x="1030" y="${y + 5}" text-anchor="end" font-size="13" fill="${CARD.muted}" ${font}>${what}</text>` : "");
+  }
+  const cardNotes = (lines, H) => lines.map((t, k) => `<text x="56" y="${H - 22 * lines.length + 4 + k * 22}" font-size="15" fill="${CARD.muted}" ${CARD_FONT}>${escapeHtml(t)}</text>`).join("");
+
+  // ---- card 1: every skater's stats and Game Score, both teams, one image
+  function skaterTableSvg(rows, team, opp, top, maxAbs) {
+    const esc = escapeHtml, font = CARD_FONT, rh = rows.length > 20 ? 38 : 42, tableTop = top + 34, barScale = 34 / maxAbs;
+    const pctOf = (a, b) => (a + b > 0 ? (100 * a / (a + b)).toFixed(1) : "&ndash;");
+    const body = rows.map((r, i) => {
+      const y = tableTop + i * rh, mid = y + rh * 0.68, col = r.est ? (r.score >= 0 ? CARD.good : CARD.bad) : gsColor(r.score, "adj"), len = Math.abs(r.score) * barScale;
+      const xgf = String(pctOf(r.v.xgf, r.v.xga)).replace("&ndash;", "-"), hd = r.v.hdcf - r.v.hdca;
+      const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
+      return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
+        <text x="46" y="${mid}" font-size="22" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
+        <text x="330" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
+        ${t(458, toiStr(r.v.toi))}${t(500, r.v.g)}${t(540, r.v.a1 + r.v.a2)}${t(590, r.v.sog)}
+        ${t(676, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
+        ${t(740, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(816, xgf)}
+        <line x1="866" y1="${y + 8}" x2="866" y2="${y + rh - 8}" stroke="${CARD.muted}" stroke-width="1" opacity="0.5"/>
+        <rect x="${r.score >= 0 ? 866 : 866 - len}" y="${y + rh * 0.3}" width="${len}" height="${rh * 0.4}" rx="4" fill="${col}" opacity="0.85"/>
+        ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
+    }).join("");
+    const heads = [["PLAYER", 46, "start"], ["TOI", 458, "end"], ["G", 500, "end"], ["A", 540, "end"], ["SOG", 590, "end"], ["H-M-L", 676, "end"], ["HD +/-", 740, "end"], ["xGF%", 816, "end"], ["GAME SCORE", 1038, "end"]]
+      .map(([t, x, a]) => `<text x="${x}" y="${tableTop - 12}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
+    return { svg: `<text x="56" y="${top}" font-size="30" font-weight="800" fill="${CARD.ink}" ${font}>${esc(team)} skaters <tspan font-weight="400" font-size="20" fill="${CARD.muted}">vs ${esc(opp)}</tspan></text>${heads}${body}`, end: tableTop + rows.length * rh };
+  }
+  function tableCardSvg(g, logoUri) {
+    const W = 1080, rowsA = cardSkaterRows(g, "away"), rowsH = cardSkaterRows(g, "home");
+    const maxAbs = Math.max(3, ...rowsA.concat(rowsH).map(r => Math.abs(r.score)));
+    const a = skaterTableSvg(rowsA, g.away, g.home, 474, maxAbs), h = skaterTableSvg(rowsH, g.home, g.away, a.end + 78, maxAbs);
+    const keyY = h.end + 34, H = keyY + 128;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+      <rect width="${W}" height="${H}" fill="${CARD.bg}"/>
+      ${cardTopBand(g, logoUri)}${a.svg}${h.svg}${cardTierKey(keyY, "GAME SCORE COLORS", "vs all skater games")}
+      ${cardNotes(["H-M-L: his own shots on goal that were high, medium and low danger.  HD +/-: high-danger shots on goal for minus against while he was on.",
+        "Game Score is Adjusted: raw plus credit for the competition faced, minus the average for his position (0 is average).",
+        "xGF%: the team's share of expected goals with him on the ice.  Source: NHL play-by-play and shift data."], H)}
+    </svg>`;
+  }
+
+  // ---- card 2: one team's Game Scores as a horizontal bar graph, forwards then defensemen, best first. Each bar is broken out into what he
+  // did: offense, defense, faceoffs and penalties, and the competition / position adjustment, stacked from zero (the pieces that add points
+  // go right, the ones that cost points go left); a white tick marks where they net out, the Adjusted Game Score, shown at the right.
+  const BAR_PARTS = [["Offense", "#4fa8e0"], ["Defense", "#e0a64f"], ["Faceoffs & penalties", "#b58be0"], ["Competition & position", "#7d93a6"]];
+  function barsCardSvg(g, side, logoUri) {
+    const team = g[side], font = CARD_FONT, esc = escapeHtml, rows = cardSkaterRows(g, side);
+    const sections = [["FORWARDS", rows.filter(r => r.pos !== "D")], ["DEFENSEMEN", rows.filter(r => r.pos === "D")]].filter(([, l]) => l.length);
+    const stackOf = (r) => (r.parts ? { pos: r.parts.reduce((a, v) => a + Math.max(v, 0), 0), neg: r.parts.reduce((a, v) => a + Math.min(v, 0), 0) } : { pos: Math.max(r.score, 0), neg: Math.min(r.score, 0) });
+    const neg = Math.max(2, ...rows.map(r => -stackOf(r).neg)), pos = Math.max(3, ...rows.map(r => stackOf(r).pos));
+    const left = 340, right = 950, px = (right - left) / (neg + pos), zeroX = left + neg * px, rh = 52;
+    let y = 296; const firstTop = y; let out = "";
+    sections.forEach(([title, list]) => {
+      out += `<text x="56" y="${y + 6}" font-size="26" font-weight="800" letter-spacing="2" fill="${CARD.accent}" ${font}>${title}</text>`;
+      y += 24;
+      list.forEach((r, i) => {
+        const top = y + i * rh, tier = r.est ? (r.score >= 0 ? CARD.good : CARD.bad) : gsColor(r.score, "adj"), v = r.v;
+        const xgf = v.xgf + v.xga > 0 ? (100 * v.xgf / (v.xgf + v.xga)).toFixed(0) + "% xGF" : "";
+        let bars = "", xp = zeroX, xn = zeroX;
+        if (r.parts) {
+          r.parts.forEach((val, k) => {
+            const len = Math.abs(val) * px; if (len < 0.5) return;
+            const x = val >= 0 ? xp : xn - len;
+            bars += `<rect x="${x.toFixed(1)}" y="${top + 9}" width="${len.toFixed(1)}" height="${rh - 18}" fill="${BAR_PARTS[k][1]}" opacity="0.92"/>`;
+            if (val >= 0) xp += len; else xn -= len;
+          });
+        } else {
+          const len = Math.abs(r.score) * px;
+          bars = `<rect x="${(r.score >= 0 ? zeroX : zeroX - len).toFixed(1)}" y="${top + 9}" width="${Math.max(len, 1).toFixed(1)}" height="${rh - 18}" rx="5" fill="${tier}" opacity="0.9"/>`;
+        }
+        const netX = zeroX + r.score * px;
+        out += `${i % 2 === 0 ? `<rect x="30" y="${top}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
+          <text x="46" y="${top + 24}" font-size="23" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
+          <text x="46" y="${top + 43}" font-size="14" fill="${CARD.muted}" ${font}>${toiStr(v.toi)}  &#183;  ${v.g}G ${v.a1 + v.a2}A  &#183;  ${v.sog} SOG${xgf ? "  &#183;  " + xgf : ""}</text>
+          ${bars}${r.parts ? `<rect x="${(netX - 2).toFixed(1)}" y="${top + 4}" width="4" height="${rh - 8}" rx="2" fill="#ffffff"/>` : ""}
+          <text x="1040" y="${top + 33}" text-anchor="end" font-size="24" font-weight="800" fill="${tier}" ${font}>${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}</text>`;
+      });
+      y += list.length * rh + 40;
+    });
+    const axis = `<line x1="${zeroX}" y1="${firstTop + 14}" x2="${zeroX}" y2="${y - 34}" stroke="${CARD.muted}" stroke-width="1.5" stroke-dasharray="4 5" opacity="0.7"/>
+      <text x="${zeroX}" y="${firstTop + 6}" text-anchor="middle" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>0</text>
+      <text x="1040" y="${firstTop + 6}" text-anchor="end" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>GAME SCORE</text>`;
+    // the key: what each color is, and the tick
+    let kx = 56; const legendY = y + 10;
+    const legend = BAR_PARTS.map(([name, col]) => { const x = kx; kx += 40 + name.length * 9.2; return `<rect x="${x}" y="${legendY - 9}" width="18" height="18" fill="${col}"/><text x="${x + 26}" y="${legendY + 5}" font-size="16" fill="${CARD.muted}" ${font}>${name}</text>`; }).join("")
+      + `<rect x="${kx}" y="${legendY - 11}" width="4" height="22" rx="2" fill="#ffffff"/><text x="${kx + 14}" y="${legendY + 5}" font-size="16" fill="${CARD.muted}" ${font}>Net (Adjusted Game Score)</text>`;
+    const keyY = legendY + 44, H = keyY + 128;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 ${H}" width="1080" height="${H}">
+      <rect width="1080" height="${H}" fill="${CARD.bg}"/>
+      ${cardTeamHeader(g, side, logoUri, team + " Game Scores", "What each skater did, stacked to his Adjusted Game Score, best first")}
+      ${out}${axis}${legend}${cardTierKey(keyY, "SCORE COLORS", "vs all skater games")}
+      ${cardNotes(["Segments to the right added to his Game Score, segments to the left took away; the white tick is where they net out.",
+        "Offense: his own scoring and shots and the team's 5v5 chances and goals for while he was on.  Defense: blocks and the same against.",
+        "Competition & position: credit for the quality of the opposition, minus the average for a forward or a defenseman (so 0 is average).",
+        "Score colors: where the Adjusted score falls among every skater game since 2024-25, top 5% elite, bottom 5% awful."], H)}
+    </svg>`;
+  }
+
+  // ---- card 3: one team's four forward lines and three defense pairs, ranked by ice time that game, each with its Unit Score and a grade against
+  // the same slot in every game since 2024-25 (percentile tiers, colored like the Game Score tiers), then its goalies with their game grades
   function linesCardSvg(g, side, logoUri) {
-    const team = g[side], opp = side === "away" ? g.home : g.away, W = 1080, font = 'font-family="Helvetica Neue, Helvetica, Arial, sans-serif"', esc = escapeHtml;
+    const team = g[side], font = CARD_FONT, esc = escapeHtml;
     const last = (id) => { const r = g.sk[side].find(x => x[0] === id); return r ? String(r[1]).split(" ").slice(-1)[0] : "?"; };
     const slots = (type, n, tag) => g.units.filter(u => u[0] === team && u[1] === type).sort((a, b) => b[2] - a[2]).slice(0, n)
       .map((u, i) => ({ slot: tag + (i + 1), u, tier: unitTier(u[12], tag + (i + 1)) }));
     const lines = slots("line", 4, "L"), pairs = slots("pair", 3, "P");
-    const winner = g.as === g.hs ? null : (g.as > g.hs ? "away" : "home");
-    const live = g.live && (g.live.state === "LIVE" || g.live.state === "CRIT");
-    const status = live ? (g.live.status || "LIVE") : g.oc === "REG" ? "FINAL" : "FINAL/" + g.oc;
-    const mine = side === "away" ? g.as : g.hs, theirs = side === "away" ? g.hs : g.as;
-    const logo = logoUri && logoUri[team] ? `<image href="${logoUri[team]}" x="56" y="92" width="130" height="130" preserveAspectRatio="xMidYMid meet"/>` : `<text x="121" y="180" text-anchor="middle" font-size="44" font-weight="800" fill="${CARD.accent}" ${font}>${esc(team)}</text>`;
+    const goalies = g.gl.filter(x => x[2] === team).map(x => ({ x, gg: gradeForGoalie(g, x) })).filter(o => o.gg).sort((a, b) => (a.gg.relief - b.gg.relief) || (b.gg.sf - a.gg.sf));
+    const GC = { great: GS_CARD_COLORS[5], quality: GS_CARD_COLORS[4], average: GS_CARD_COLORS[3], bad: GS_CARD_COLORS[1], blown: GS_CARD_COLORS[0] };
     const rh = 86, colSlot = 46, colNames = 104, colToi = 560, colG = 650, colXg = 770, colScore = 880, chipX = 906, chipW = 144;
-    const head = (y) => [["", colSlot, "start"], ["PLAYERS", colNames, "start"], ["TOI", colToi, "end"], ["GF-GA", colG, "end"], ["xGF-xGA", colXg, "end"], ["UNIT", colScore, "end"], ["GRADE", chipX + chipW / 2, "middle"]]
-      .map(([t, x, a]) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
-    const rowSvg = (r, y, i) => {
-      const u = r.u, col = GS_CARD_COLORS[r.tier], mid = y + rh * 0.62, sc = u[12];
-      const diff = (a, b, d) => { const x = a - b; return `${x > 0 ? "+" : ""}${d ? x.toFixed(1) : x}`; };
-      const t = (x, txt, size, fill, weight, anchor) => `<text x="${x}" y="${mid}" text-anchor="${anchor || "end"}" font-size="${size}" font-weight="${weight || 400}" fill="${fill}" ${font}>${txt}</text>`;
-      const names = u[3].map(last).join(", ");
+    const head = (y, cols) => cols.map(([t, x, a]) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
+    const chip = (y, col, label) => `<rect x="${chipX}" y="${y + 18}" width="${chipW}" height="${rh - 36}" rx="10" fill="${col}" fill-opacity="0.22" stroke="${col}" stroke-width="1.5"/>
+        <text x="${chipX + chipW / 2}" y="${y + rh * 0.62}" text-anchor="middle" font-size="${label.length > 9 ? 16 : 19}" font-weight="800" fill="${col}" ${font}>${label}</text>`;
+    const txt = (y, x, s, size, fill, weight, anchor) => `<text x="${x}" y="${y + rh * 0.62}" text-anchor="${anchor || "end"}" font-size="${size}" font-weight="${weight || 400}" fill="${fill}" ${font}>${s}</text>`;
+    const unitRow = (r, y, i) => {
+      const u = r.u, col = GS_CARD_COLORS[r.tier], sc = u[12];
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
-        ${t(colSlot, r.slot, 28, CARD.accent, 800, "start")}${t(colNames, esc(names), 25, CARD.ink, 400, "start")}
-        ${t(colToi, toiStr(u[2]), 24, CARD.ink)}
-        ${t(colG, `${u[6]}-${u[7]}`, 24, CARD.ink)}${t(colXg, `${u[8].toFixed(1)}-${u[9].toFixed(1)}`, 24, CARD.ink)}
-        ${t(colScore, `${sc > 0 ? "+" : ""}${sc.toFixed(2)}`, 28, col, 800)}
-        <rect x="${chipX}" y="${y + 18}" width="${chipW}" height="${rh - 36}" rx="10" fill="${col}" fill-opacity="0.22" stroke="${col}" stroke-width="1.5"/>
-        <text x="${chipX + chipW / 2}" y="${mid}" text-anchor="middle" font-size="19" font-weight="800" fill="${col}" ${font}>${GS_TIER_NAME[r.tier].toUpperCase()}</text>`;
+        ${txt(y, colSlot, r.slot, 28, CARD.accent, 800, "start")}${txt(y, colNames, esc(u[3].map(last).join(", ")), 25, CARD.ink, 400, "start")}
+        ${txt(y, colToi, toiStr(u[2]), 24, CARD.ink)}${txt(y, colG, `${u[6]}-${u[7]}`, 24, CARD.ink)}${txt(y, colXg, `${u[8].toFixed(1)}-${u[9].toFixed(1)}`, 24, CARD.ink)}
+        ${txt(y, colScore, `${sc > 0 ? "+" : ""}${sc.toFixed(2)}`, 28, col, 800)}${chip(y, col, GS_TIER_NAME[r.tier].toUpperCase())}`;
     };
-    const section = (title, list, top) => list.length
-      ? `<text x="56" y="${top}" font-size="26" font-weight="800" letter-spacing="2" fill="${CARD.accent}" ${font}>${title}</text>${head(top + 38)}${list.map((r, i) => rowSvg(r, top + 50 + i * rh, i)).join("")}`
+    const goalieRow = ({ x, gg }, y, i) => {
+      const col = GC[gg.gr], tags = gg.tags.join("  ·  ");
+      return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
+        <text x="${colSlot}" y="${y + (tags ? 38 : 54)}" font-size="25" fill="${CARD.ink}" ${font}>${esc(x[1])}</text>
+        ${tags ? `<text x="${colSlot}" y="${y + 64}" font-size="16" fill="${CARD.muted}" ${font}>${esc(tags)}</text>` : ""}
+        ${txt(y, colToi, gg.sf, 24, CARD.ink)}${txt(y, colG, gg.ga, 24, CARD.ink)}${txt(y, colXg, (gg.ga + gg.gsax).toFixed(2), 24, CARD.ink)}
+        ${txt(y, colScore, `${gg.gsax > 0 ? "+" : ""}${gg.gsax.toFixed(2)}`, 28, col, 800)}${chip(y, col, GRADE_LABEL[gg.gr].toUpperCase())}`;
+    };
+    const unitCols = [["", colSlot, "start"], ["PLAYERS", colNames, "start"], ["TOI", colToi, "end"], ["GF-GA", colG, "end"], ["xGF-xGA", colXg, "end"], ["UNIT", colScore, "end"], ["GRADE", chipX + chipW / 2, "middle"]];
+    const goalieCols = [["GOALIE", colSlot, "start"], ["SHOTS", colToi, "end"], ["GA", colG, "end"], ["xGA", colXg, "end"], ["GSAx", colScore, "end"], ["GRADE", chipX + chipW / 2, "middle"]];
+    const section = (title, cols, list, rowFn, top) => list.length
+      ? `<text x="56" y="${top}" font-size="26" font-weight="800" letter-spacing="2" fill="${CARD.accent}" ${font}>${title}</text>${head(top + 38, cols)}${list.map((r, i) => rowFn(r, top + 50 + i * rh, i)).join("")}`
       : "";
-    const y1 = 296, y2 = y1 + 50 + lines.length * rh + 56;
-    const keyY = y2 + 50 + pairs.length * rh + 40;
-    const keyX = [250, 336, 410, 540, 652, 724, 806];
-    const key = `<text x="56" y="${keyY + 5}" font-size="13" letter-spacing="1.2" fill="${CARD.muted}" ${font}>GRADE</text>`
-      + GS_TIER_NAME.map((n, i) => `<circle cx="${keyX[i]}" cy="${keyY}" r="7" fill="${GS_CARD_COLORS[i]}"/><text x="${keyX[i] + 13}" y="${keyY + 5}" font-size="15" fill="${CARD.muted}" ${font}>${n}</text>`).join("");
-    const H = keyY + 150;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
-      <rect width="${W}" height="${H}" fill="${CARD.bg}"/>
-      <rect width="${W}" height="250" fill="${CARD.band}"/>
-      ${cardMark(48, 14, 56)}<text x="136" y="62" font-size="26" font-weight="800" letter-spacing="4" fill="${CARD.accent}" ${font}>SHIFT SCORE</text>
-      <text x="1032" y="62" text-anchor="end" font-size="24" fill="${CARD.muted}" ${font}>${esc(g.date || "")}</text>
-      ${logo}
-      <text x="210" y="150" font-size="46" font-weight="800" fill="${CARD.ink}" ${font}>${esc(team)} lines &amp; pairs</text>
-      <text x="210" y="196" font-size="26" fill="${CARD.muted}" ${font}>${esc(team)} ${mine}, ${esc(opp)} ${theirs} &#183; ${esc(status)} &#183; ${g.away} at ${g.home}</text>
-      <text x="210" y="232" font-size="20" fill="${CARD.muted}" ${font}>Ranked by ice time this game, graded against the same slot in every game since 2024-25</text>
-      ${section("FORWARD LINES", lines, y1 + 24)}${section("DEFENSE PAIRS", pairs, y2 + 24)}
-      ${key}
-      ${["Lines and pairs are the exact groups on the ice together at even strength, ranked by time together this game.",
-        "Power-play and penalty-kill units are not included (they are under Lines & special teams on the game page).",
-        "Unit Score: how the unit did on chances, goals and shots while together; 0 is an average game. GF-GA: goals for and against.",
-        "xGF-xGA: expected goals for and against. Grade: where the Unit Score falls among every line or pair in that slot,",
-        "top 5% elite, bottom 5% awful. One game is a small sample.  Source: NHL play-by-play and shift data."]
-        .map((t, k) => `<text x="56" y="${H - 108 + k * 22}" font-size="15" fill="${CARD.muted}" ${font}>${esc(t)}</text>`).join("")}
+    const y1 = 296, y2 = y1 + 50 + lines.length * rh + 56, y3 = y2 + 50 + pairs.length * rh + 56;
+    const keyY = (goalies.length ? y3 + 50 + goalies.length * rh : y2 + 50 + pairs.length * rh) + 40;
+    const notes = ["Lines and pairs are the exact groups on the ice together at even strength, ranked by time together this game.",
+      "Power-play and penalty-kill units are not included (they are under Lines & special teams on the game page).",
+      "Unit Score: how the unit did on chances, goals and shots while together; 0 is an average game. GF-GA: goals for and against.",
+      "xGF-xGA: expected goals for and against. Grade: where the Unit Score falls among every line or pair in that slot,",
+      "top 5% elite, bottom 5% awful. One game is a small sample."];
+    if (goalies.length) notes.push("Goalie grade: goals saved above expected (GSAx) over the game. Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5,",
+      "Bad -0.5 to -1.5, Blown worse. Stolen win: a Great or Quality game in a win when his team was out-chanced by 1+ xG.",
+      "Bailed out: a Bad or Blown game in a win. Relief: another goalie on his team faced more shots.");
+    notes.push("Source: NHL play-by-play and shift data.");
+    const H = keyY + 40 + 22 * notes.length + 18;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 ${H}" width="1080" height="${H}">
+      <rect width="1080" height="${H}" fill="${CARD.bg}"/>
+      ${cardTeamHeader(g, side, logoUri, team + " lines, pairs & goalies", "Ranked by ice time this game, graded against the same slot since 2024-25")}
+      ${section("FORWARD LINES", unitCols, lines, unitRow, y1 + 24)}${section("DEFENSE PAIRS", unitCols, pairs, unitRow, y2 + 24)}${section("GOALIES", goalieCols, goalies, goalieRow, y3 + 24)}
+      ${cardTierKey(keyY, "GRADE")}${cardNotes(notes, H)}
     </svg>`;
   }
   // a half-rink with one team's shots, dots colored by danger band (red high, blue medium, gray low); goals have a white ring,
@@ -569,7 +718,11 @@ const GameView = (() => {
   }
   let cardLogoUri; // undefined until the logos are requested, then the {team: data URI} map or null
 
-  const shareSvg = (kind, g, side, logos) => (kind === "lines" ? linesCardSvg(g, side, logos) : gameCardSvg(g, side, logos));
+  const shareSvg = (kind, g, side, logos) => (kind === "table" ? tableCardSvg(g, logos) : kind === "bars" ? barsCardSvg(g, side, logos)
+    : kind === "lines" ? linesCardSvg(g, side, logos) : gameCardSvg(g, side, logos));
+  // a card named by one string, as the Home page keeps them: "table" (both teams), "bars-away", "lines-home", ... ("away" / "home" alone is the full game card)
+  const parseCardKey = (key) => { const m = String(key).match(/^(bars|lines|full)-(away|home)$/); return key === "table" ? { kind: "table", side: "home" } : m ? { kind: m[1] === "full" ? "card" : m[1], side: m[2] } : { kind: "card", side: key === "away" ? "away" : "home" }; };
+  const cardFileName = (g, kind, side) => `shiftscore-${g.date || "game"}-${g.away}-at-${g.home}-${kind === "table" ? "skater-table" : g[side] + (kind === "bars" ? "-game-scores" : kind === "lines" ? "-lines-pairs-goalies" : "")}.png`;
   async function cardPng(svg, W, H) {
     const img = new Image(), url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
     await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
@@ -712,7 +865,7 @@ const GameView = (() => {
       if (cb) { state.card = cb.dataset.gvCard; renderBody(); return; }
       if (ev.target.closest("button[data-gv-card-save]")) {
         const side = state.card || "home", svg = shareSvg(state.share, g, side, cardLogoUri || null);
-        await saveCardImage(svg, `shiftscore-${g.date || "game"}-${g.away}-at-${g.home}-${g[side]}${state.share === "lines" ? "-lines" : ""}.png`);
+        await saveCardImage(svg, cardFileName(g, state.share || "card", side));
         return;
       }
       const b = ev.target.closest("button[data-gv-danger]");
@@ -1100,12 +1253,16 @@ const GameView = (() => {
         const makeSvg = (sd) => shareSvg(share, g, sd, cardLogoUri || null);
         const cardSection = `<div class="detail-h3">Shareable graphics</div>
           <div class="chips" role="group" aria-label="Shareable graphics">
-            <button type="button" class="chip" aria-pressed="${share === "card"}" data-gv-share="card">${share === "card" ? "Hide" : "Show"} game score card</button>
-            <button type="button" class="chip" aria-pressed="${share === "lines"}" data-gv-share="lines">${share === "lines" ? "Hide" : "Show"} lines &amp; pairs card</button></div>
-          ${share ? `<div class="gv-card-bar"><div class="chips" role="group" aria-label="Team">${["away", "home"].map(sd => `<button type="button" class="chip" aria-pressed="${cardSide === sd}" data-gv-card="${sd}">${escapeHtml(g[sd])}</button>`).join("")}</div>
+            ${[["table", "Skater table (both teams)"], ["bars", "Game Score bars"], ["lines", "Lines, pairs & goalies"], ["card", "Full game card"]].map(([k, label]) =>
+              `<button type="button" class="chip" aria-pressed="${share === k}" data-gv-share="${k}">${share === k ? "Hide " : ""}${label}</button>`).join("")}</div>
+          ${share ? `<div class="gv-card-bar">${share === "table" ? "" : `<div class="chips" role="group" aria-label="Team">${["away", "home"].map(sd => `<button type="button" class="chip" aria-pressed="${cardSide === sd}" data-gv-card="${sd}">${escapeHtml(g[sd])}</button>`).join("")}</div>`}
             <button type="button" class="chip gv-card-save" data-gv-card-save="1">Save image (PNG)</button></div>
             <div class="gv-card-preview">${makeSvg(cardSide)}</div>
-            <div class="panel-caption">${share === "lines" ? "A shareable card for one team's four forward lines and three defense pairs, ranked by ice time, each with its Unit Score and a grade against the same slot in every game since 2024-25. Pick a team, then save it as an image." : "A shareable card for one team's night: score and expected score, the verdict, every skater's stats, shot danger and Game Score, the best line and pair, power play and penalty kill, and shot maps by danger. Pick a team, then save it as an image."}</div>` : `<div class="panel-caption">Two shareable images per team: the full game score card, and the lines &amp; pairs card. Open one to preview and save it.</div>`}`;
+            <div class="panel-caption">${{
+              table: "Every skater on both teams in one image: ice time, goals, assists, shots, shot danger, shot-attempt and chance differentials, and Game Score.",
+              bars: "One team's Game Scores as a bar graph, forwards then defensemen, best first, colored by how good the game was. Pick a team, then save it as an image.",
+              lines: "One team's four forward lines and three defense pairs by ice time, each with its Unit Score and a grade, then its goalies and their game grades. Pick a team, then save it as an image.",
+              card: "The full card for one team's night: score and expected score, the verdict, every skater's stats, shot danger and Game Score, the best line and pair, goalie, power play and penalty kill, and shot maps by danger. Pick a team, then save it as an image."}[share]}</div>` : `<div class="panel-caption">Four shareable images: a table of every skater, a Game Score bar graph per team, lines, pairs and goalie grades per team, and the full game card. Open one to preview and save it.</div>`}`;
         // a compact one-line-per-team version of the special-teams nights for the summary; the per-unit tables live under Lines & special teams
         const stCompact = (() => {
           const cell = (side, kind) => { const r = stRowsFor(side, kind)[0]; return r ? `${r[5]} <span class="detail-sub">${r[2]} xG ${kind === "pp" ? "for" : "against"} (typical ${r[3]}), ${r[4]} goal${r[4] === 1 ? "" : "s"}</span>` : "&ndash;"; };
@@ -1200,7 +1357,7 @@ const GameView = (() => {
     cardLogos,
     tileStats,
     nightStars,
-    card: (g, side, logos) => gameCardSvg(g, side, logos || null),
-    saveCard: (g, side, logos) => saveCardImage(gameCardSvg(g, side, logos || null), `shiftscore-${g.date || "game"}-${g.away}-at-${g.home}-${g[side]}.png`),
+    card: (g, key, logos) => { const { kind, side } = parseCardKey(key); return shareSvg(kind, g, side, logos || null); },
+    saveCard: (g, key, logos) => { const { kind, side } = parseCardKey(key); return saveCardImage(shareSvg(kind, g, side, logos || null), cardFileName(g, kind, side)); },
   };
 })();

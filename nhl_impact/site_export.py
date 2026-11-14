@@ -381,7 +381,7 @@ def compact_game(g: dict) -> dict:
         "goals": g["goals"],
         "pens": [[p["period"], p["label"], p["time"], p["team"], p["player"], p["pid"], p["desc"], p["min"]] for p in g["penalties"]],
         "sk": {
-            side: [[s["id"], s["name"], s["pos"], s["raw"], s["qoc"], s["qot"], s["adj"], s["pv"], _trim_cells(s["cells"]), s["zs"]] for s in rows_]
+            side: [[s["id"], s["name"], s["pos"], s["raw"], s["qoc"], s["qot"], s["adj"], s["pv"], _trim_cells(s["cells"]), s["zs"], s["parts"]] for s in rows_]
             for side, rows_ in g["skaters"].items()
         },
         "gl": [[x["id"], x["name"], x["team"], _trim_cells(x["cells"]), 1 if x.get("starter") else 0] for x in g["goalies"]],

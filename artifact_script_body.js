@@ -1310,7 +1310,7 @@ async function renderHome() {
         <div class="home-tile-more"><div class="live-sub">${g[7] ? "Top: " + escapeHtml(g[7]) : "&nbsp;"}</div></div>
         <div class="home-tile-cards" data-home-cards-for="${g[0]}"></div>
       </div>
-      <div class="home-card-row" id="hg-${g[0]}"${o.away || o.home ? "" : " hidden"}><div class="home-cards"></div></div>`;
+      <div class="home-card-row" id="hg-${g[0]}"${Object.values(o).some(Boolean) ? "" : " hidden"}><div class="home-cards"></div></div>`;
   }).join("") + "</div>" : "") + homeExtrasHtml(D, games.length > 0);
   hydrateImages();
   homeNightFill(token, seasonAtStart);
@@ -1318,11 +1318,11 @@ async function renderHome() {
   const logos = await GameView.cardLogos();
   // a card is built the first time its button is pressed (one side at a time) and kept; pressing again hides it
   games.forEach(g => {
-    homeFill[g[0]] = async (side) => {
+    homeFill[g[0]] = async (side) => {      // side: a card key ("table", "bars-away", "lines-home", ...)
       const box = host.querySelector(`#hg-${g[0]} .home-cards`);
       if (!box || box.querySelector(`[data-side="${side}"]`)) return;
       const fig = document.createElement("figure");
-      fig.className = "home-card"; fig.dataset.side = side; fig.style.order = side === "away" ? 0 : 1;
+      fig.className = "home-card"; fig.dataset.side = side; fig.style.order = HOME_CARD_ORDER.indexOf(side);
       fig.innerHTML = '<div class="loading">Loading card&hellip;</div>';
       box.appendChild(fig);
       try {
@@ -1330,7 +1330,7 @@ async function renderHome() {
         if (token !== homeToken || seasonAtStart !== SEASON) return;
         if (!game) { fig.innerHTML = '<div class="empty">This game is not available yet.</div>'; return; }
         fig.innerHTML = `<div class="gv-card-preview">${GameView.card(game, side, logos)}</div>
-          <button type="button" class="chip" data-home-save="${HS}|${g[0]}|${g[4]}|${side}">Save ${escapeHtml(game[side])} card as image</button>`;
+          <button type="button" class="chip" data-home-save="${HS}|${g[0]}|${g[4]}|${side}">Save card as image</button>`;
       } catch (e) {
         fig.innerHTML = '<div class="empty">Couldn\'t build the card for this game. Open the game for the box score.</div>';
       }
@@ -1353,28 +1353,33 @@ async function renderHome() {
       const slot = host.querySelector(`#hr-${g[0]} .home-tile-cards`);
       if (game && slot) {
         const o = homeCardsState(g[0]);
-        slot.innerHTML = ["away", "home"].map(side => `<button type="button" class="chip" data-home-card="${g[0]}|${side}" aria-pressed="${!!o[side]}">${escapeHtml(game[side])} card</button>`).join("");
-        for (const side of ["away", "home"]) if (o[side]) await homeFill[g[0]](side);
+        slot.innerHTML = homeCardList(game).map(([key, label]) => `<button type="button" class="chip" data-home-card="${g[0]}|${key}" aria-pressed="${!!o[key]}">${escapeHtml(label)}</button>`).join("");
+        for (const key of HOME_CARD_ORDER) if (o[key]) await homeFill[g[0]](key);
       }
     } catch (e) {}
   }
 }
-// which of a game's two cards are showing on Home: {away, home}. (Older state held a plain true for "open", meaning both.)
+// the cards a finished game offers on Home, in the order they show: a table of every skater (both teams), then each team's Game Score bars and
+// its lines, pairs and goalie grades. (The full game card is on the game page.)
+const homeCardList = (game) => [["table", "Skater table"], ["bars-away", `${game.away} Game Scores`], ["bars-home", `${game.home} Game Scores`],
+  ["lines-away", `${game.away} lines & goalies`], ["lines-home", `${game.home} lines & goalies`]];
+const HOME_CARD_ORDER = ["table", "bars-away", "bars-home", "lines-away", "lines-home"];
+// which of a game's cards are showing on Home: {card key: true}. (Older state kept {away, home}, the full cards, or a plain true: all closed now.)
 function homeCardsState(gid) {
   const o = specialState.home.open[gid];
-  return o && typeof o === "object" ? o : { away: !!o, home: !!o };
+  return o && typeof o === "object" ? Object.fromEntries(Object.entries(o).filter(([k, v]) => v && HOME_CARD_ORDER.includes(k))) : {};
 }
-function setHomeCard(gid, side, on) {
+function setHomeCard(gid, key, on) {
   const sec = document.getElementById("hg-" + gid);
   if (!sec) return;
-  const o = Object.assign({}, homeCardsState(gid), { [side]: on });
+  const o = Object.assign({}, homeCardsState(gid), { [key]: on });
   specialState.home.open[gid] = o;
-  const btn = document.querySelector(`[data-home-card="${gid}|${side}"]`);
+  const btn = document.querySelector(`[data-home-card="${gid}|${key}"]`);
   if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
-  sec.hidden = !(o.away || o.home);
-  const fig = sec.querySelector(`[data-side="${side}"]`);
+  sec.hidden = !Object.values(o).some(Boolean);
+  const fig = sec.querySelector(`[data-side="${key}"]`);
   if (fig) fig.hidden = !on;
-  else if (on && homeFill[gid]) homeFill[gid](side);
+  else if (on && homeFill[gid]) homeFill[gid](key);
 }
 document.addEventListener("click", async (ev) => {
   const card = ev.target.closest("[data-home-card]");

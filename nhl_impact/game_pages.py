@@ -15,6 +15,7 @@ from collections import defaultdict
 from .game_info import game_results
 from .game_slices import cell_index, compute_game_slices, team_situation
 from .unit_pages import order_players, player_slots, unit_key
+from .gamescore import WEIGHTS, game_score_parts
 from .units import team_states
 
 # Within one game, most "units" are fragments (a line together for 20s, a PP
@@ -83,14 +84,18 @@ def build_games(conn, unit_keys: set | None = None, pipeline=None) -> list[dict]
 
     # bulk-load per-game rows once instead of querying per game
     impact_rows = defaultdict(dict)
-    for gid, pid, tid, raw, qoc, qot, adj, pv, oz, dz, nz, fly in conn.execute(
+    score_terms = sorted(WEIGHTS)
+    cur = conn.execute(
         """SELECT pgs.game_id, pgs.player_id, pgs.team_id, pgi.raw_game_score, pgi.qoc, pgi.qot,
                   pgi.adjusted_impact, pgs.predicted_value,
-                  pgs.oz_starts, pgs.dz_starts, pgs.nz_starts, pgs.fly_starts
+                  pgs.oz_starts, pgs.dz_starts, pgs.nz_starts, pgs.fly_starts, """ + ", ".join("pgs." + t for t in score_terms) + """
            FROM player_game_stats pgs
            LEFT JOIN player_game_impact pgi ON pgi.game_id = pgs.game_id AND pgi.player_id = pgs.player_id"""
-    ):
-        impact_rows[gid][pid] = (tid, raw, qoc, qot, adj, pv, [oz or 0, dz or 0, nz or 0, fly or 0])
+    )
+    for row in cur:
+        gid, pid, tid, raw, qoc, qot, adj, pv, oz, dz, nz, fly = row[:12]
+        parts = tuple(round(x, 2) for x in game_score_parts(dict(zip(score_terms, (v or 0 for v in row[12:]))))) if raw is not None else None
+        impact_rows[gid][pid] = (tid, raw, qoc, qot, adj, pv, [oz or 0, dz or 0, nz or 0, fly or 0], parts)
     from .goalie_stats import starters as goalie_starters
     starter_of = goalie_starters(conn)   # (game, team) -> the goalie who started (in net at the opening faceoff)
     events_by_game = defaultdict(list)
@@ -133,7 +138,7 @@ def build_games(conn, unit_keys: set | None = None, pipeline=None) -> list[dict]
 
         sk = {home_id: [], away_id: []}
         goalies = []
-        for pid, (tid, raw, qoc, qot, adj, pv, zs) in impact_rows.get(game_id, {}).items():
+        for pid, (tid, raw, qoc, qot, adj, pv, zs, parts) in impact_rows.get(game_id, {}).items():
             name, pos = players.get(pid, (str(pid), "?"))
             if pos == "G":
                 if pid in slices["goalies"] and tid in abbrev:
@@ -151,6 +156,7 @@ def build_games(conn, unit_keys: set | None = None, pipeline=None) -> list[dict]
                     "adj": round(adj, 2) if adj is not None else None,
                     "pv": round(pv, 3) if pv is not None else None,
                     "zs": zs,  # shift starts: offensive zone, defensive zone, neutral zone, on the fly
+                    "parts": parts,  # (offense, defense, faceoffs and penalties) points; with the competition / position adjustment they add up to adj
                 }
             )
         for lst in sk.values():
