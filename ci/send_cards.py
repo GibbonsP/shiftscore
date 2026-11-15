@@ -50,7 +50,9 @@ def finished_games(date: str) -> list[dict]:
         if g.get("gameState") not in FINISHED or g.get("gameType", 2) not in (2, 3):
             continue
         pt = (g.get("gameOutcome") or {}).get("lastPeriodType")
-        out.append({"id": g["id"], "date": date, "away": g["awayTeam"]["abbrev"], "home": g["homeTeam"]["abbrev"],
+        start = g.get("startTimeUTC")
+        out.append({"id": g["id"], "date": date, "start_ms": int(datetime.fromisoformat(start.replace("Z", "+00:00")).timestamp() * 1000) if start else 0,
+                    "away": g["awayTeam"]["abbrev"], "home": g["homeTeam"]["abbrev"],
                     "away_score": g["awayTeam"].get("score", 0), "home_score": g["homeTeam"].get("score", 0),
                     "tag": "Final" + (f"/{pt}" if pt and pt != "REG" else "")})
     return out
@@ -184,7 +186,9 @@ def main():
     # per subscriber: the games of theirs that are on the site and that they have not been sent yet
     plan = []
     for s in subs:
-        mine = [g for g in games if (g["away"] in s["teams"] or g["home"] in s["teams"]) and str(g["id"]) not in s["sent"]]
+        # only games that finished after they confirmed (a game lasts about 3 hours, so one that started up to 3 hours before counts), never a backlog
+        since = s.get("since", 0) - 3 * 3600 * 1000
+        mine = [g for g in games if (g["away"] in s["teams"] or g["home"] in s["teams"]) and str(g["id"]) not in s["sent"] and g["start_ms"] >= since]
         mine = [g for g in mine if on_site(site, g, cache)]
         if mine:
             plan.append((s, sorted(mine, key=lambda g: (g["date"], g["id"]))))

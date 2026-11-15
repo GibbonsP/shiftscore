@@ -103,7 +103,7 @@ Visitors pick teams on Home and get an email with the cards for their teams' gam
 * `ci/send_cards.py` and the **Send cards** workflow: it runs after every **Update site** run. It finds the subscribers who have new
   cards waiting (a finished game of theirs that is on the site and that they were not sent yet), renders those cards in a headless
   browser from the live site, uploads them to the live bucket under `cards/<date>/`, sends each subscriber one email with all their new
-  games, and records who got which game. A run with nothing new does nothing.
+  games, and records who got which game. A run with nothing new does nothing. A new subscriber gets every game that finishes after they confirm, with no backlog of earlier games.
 * **How soon:** a game is processed about 3.5 hours after the puck drops (about an hour after it ends, once the shift chart is out).
   **Update site** runs every half hour from 5 pm to 3 am Eastern and every two hours by day, so the cards usually arrive within about
   an hour and a half of the final horn.
