@@ -446,13 +446,13 @@ const GameView = (() => {
       const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
         <text x="46" y="${mid}" font-size="22" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
-        <text x="352" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
-        ${t(470, toiStr(r.v.toi))}${t(535, r.v.g)}${t(600, r.v.a1 + r.v.a2)}${t(670, r.v.sog)}
-        ${t(765, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
-        ${t(845, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(915, xgf)}
+        <text x="326" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
+        ${t(440, toiStr(r.v.toi))}${t(490, r.v.g)}${t(540, r.v.a1)}${t(590, r.v.a2)}${t(645, r.v.sog)}${t(712, r.v.ixg.toFixed(2))}
+        ${t(805, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
+        ${t(865, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(927, xgf)}
         ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
     }).join("");
-    const heads = [["PLAYER", 46, "start"], ["TOI", 470, "end"], ["G", 535, "end"], ["A", 600, "end"], ["SOG", 670, "end"], ["H-M-L", 765, "end"], ["HD +/-", 845, "end"], ["xGF%", 915, "end"], ["GAME SCORE", 1038, "end"]]
+    const heads = [["PLAYER", 46, "start"], ["TOI", 440, "end"], ["G", 490, "end"], ["A1", 540, "end"], ["A2", 590, "end"], ["SOG", 645, "end"], ["ixG", 712, "end"], ["H-M-L", 805, "end"], ["HD +/-", 865, "end"], ["xGF%", 927, "end"], ["GAME SCORE", 1038, "end"]]
       .map(([t, x, a]) => `<text x="${x}" y="${tableTop - 12}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
     const summary = lines.map(([label, what, val, col], i) => {
       const y = sumTop + 30 + i * 40;
@@ -479,9 +479,9 @@ const GameView = (() => {
       <text x="1024" y="414" text-anchor="end" font-size="17" fill="${CARD.muted}" ${font}>${wh}% ${esc(g.home)}  chance to win on shot quality</text>
       <text x="56" y="474" font-size="30" font-weight="800" fill="${CARD.ink}" ${font}>${esc(team)} skaters <tspan font-weight="400" font-size="20" fill="${CARD.muted}">vs ${esc(opp)}</tspan></text>
       ${heads}${body}${scoreKey}${summary}${dangerBlock}
-      <text x="56" y="${H - 84}" font-size="15" fill="${CARD.muted}" ${font}>H-M-L: his own shots on goal that were high, medium and low danger.  HD +/-: high-danger shots on goal for minus against while he was on.</text>
+      <text x="56" y="${H - 84}" font-size="15" fill="${CARD.muted}" ${font}>H-M-L: his shots on goal by danger.  ixG: expected goals on them.  HD +/-: high-danger shots on goal for minus against while he was on.</text>
       <text x="56" y="${H - 62}" font-size="15" fill="${CARD.muted}" ${font}>Game Score is Adjusted: raw plus credit for the competition, minus his position's average (0 is average).  xGF%: team's xG share while he's on.${rows.some(r => r.est) ? "  * estimated so far." : ""}</text>
-      <text x="56" y="${H - 40}" font-size="15" fill="${CARD.muted}" ${font}>Shot-quality odds ignore the goalie and score effects.  Source: NHL play-by-play and shift data.</text>
+      <text x="56" y="${H - 40}" font-size="15" fill="${CARD.muted}" ${font}>Shot-quality odds ignore the goalie and score effects.  A1 / A2: primary and secondary assists.  Source: NHL play-by-play and shift data.</text>
       <text x="56" y="${H - 18}" font-size="15" fill="${CARD.muted}" ${font}>Goalie grade (goals saved above expected): Great over +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse.</text>
     </svg>`;
   }
@@ -554,13 +554,13 @@ const GameView = (() => {
       const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
         <text x="46" y="${mid}" font-size="22" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
-        <text x="352" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
-        ${t(470, toiStr(r.v.toi))}${t(535, r.v.g)}${t(600, r.v.a1 + r.v.a2)}${t(670, r.v.sog)}
-        ${t(765, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
-        ${t(845, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(915, xgf)}
+        <text x="326" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
+        ${t(440, toiStr(r.v.toi))}${t(490, r.v.g)}${t(540, r.v.a1)}${t(590, r.v.a2)}${t(645, r.v.sog)}${t(712, r.v.ixg.toFixed(2))}
+        ${t(805, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
+        ${t(865, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(927, xgf)}
         ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
     }).join("");
-    const heads = [["PLAYER", 46, "start"], ["TOI", 470, "end"], ["G", 535, "end"], ["A", 600, "end"], ["SOG", 670, "end"], ["H-M-L", 765, "end"], ["HD +/-", 845, "end"], ["xGF%", 915, "end"], ["GAME SCORE", 1038, "end"]]
+    const heads = [["PLAYER", 46, "start"], ["TOI", 440, "end"], ["G", 490, "end"], ["A1", 540, "end"], ["A2", 590, "end"], ["SOG", 645, "end"], ["ixG", 712, "end"], ["H-M-L", 805, "end"], ["HD +/-", 865, "end"], ["xGF%", 927, "end"], ["GAME SCORE", 1038, "end"]]
       .map(([t, x, a]) => `<text x="${x}" y="${tableTop - 12}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
     return { svg: `<text x="56" y="${top}" font-size="30" font-weight="800" fill="${CARD.ink}" ${font}>${esc(team)} skaters <tspan font-weight="400" font-size="20" fill="${CARD.muted}">vs ${esc(opp)}</tspan></text>${heads}${body}`, end: tableTop + rows.length * rh };
   }
@@ -571,9 +571,9 @@ const GameView = (() => {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
       <rect width="${W}" height="${H}" fill="${CARD.bg}"/>
       ${cardTopBand(g, logoUri)}${a.svg}${h.svg}${cardTierKey(keyY, "GAME SCORE COLORS", "vs all skater games")}
-      ${cardNotes(["H-M-L: his own shots on goal that were high, medium and low danger.  HD +/-: high-danger shots on goal for minus against while he was on.",
+      ${cardNotes(["H-M-L: his shots on goal by danger.  ixG: expected goals on them.  HD +/-: high-danger shots on goal for minus against while he was on.",
         "Game Score is Adjusted: raw plus credit for the competition faced, minus the average for his position (0 is average).",
-        "xGF%: the team's share of expected goals with him on the ice.  Source: NHL play-by-play and shift data."], H)}
+        "xGF%: the team's share of expected goals with him on the ice.  A1 / A2: primary and secondary assists.  Source: NHL play-by-play and shift data."], H)}
     </svg>`;
   }
 
@@ -609,7 +609,7 @@ const GameView = (() => {
         const netX = zeroX + r.score * px;
         out += `${i % 2 === 0 ? `<rect x="30" y="${top}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
           <text x="46" y="${top + 24}" font-size="23" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
-          <text x="46" y="${top + 43}" font-size="14" fill="${CARD.muted}" ${font}>${toiStr(v.toi)}  &#183;  ${v.g}G ${v.a1 + v.a2}A  &#183;  ${v.sog} SOG${xgf ? "  &#183;  " + xgf : ""}</text>
+          <text x="46" y="${top + 43}" font-size="14" fill="${CARD.muted}" ${font}>${toiStr(v.toi)}  &#183;  ${v.g}G ${v.a1 + v.a2}A  &#183;  ${v.sog} SOG  &#183;  ${v.ixg.toFixed(2)} ixG${xgf ? "  &#183;  " + xgf : ""}</text>
           ${bars}${r.parts ? `<rect x="${(netX - 2).toFixed(1)}" y="${top + 4}" width="4" height="${rh - 8}" rx="2" fill="#ffffff"/>` : ""}
           <text x="1040" y="${top + 33}" text-anchor="end" font-size="24" font-weight="800" fill="${tier}" ${font}>${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}</text>`;
       });
