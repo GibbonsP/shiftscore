@@ -446,13 +446,13 @@ const GameView = (() => {
       const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
         <text x="46" y="${mid}" font-size="22" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
-        <text x="330" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
-        ${t(458, toiStr(r.v.toi))}${t(500, r.v.g)}${t(540, r.v.a1 + r.v.a2)}${t(590, r.v.sog)}
-        ${t(676, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
-        ${t(740, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(816, xgf)}
+        <text x="352" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
+        ${t(470, toiStr(r.v.toi))}${t(535, r.v.g)}${t(600, r.v.a1 + r.v.a2)}${t(670, r.v.sog)}
+        ${t(765, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
+        ${t(845, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(915, xgf)}
         ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
     }).join("");
-    const heads = [["PLAYER", 46, "start"], ["TOI", 458, "end"], ["G", 500, "end"], ["A", 540, "end"], ["SOG", 590, "end"], ["H-M-L", 676, "end"], ["HD +/-", 740, "end"], ["xGF%", 816, "end"], ["GAME SCORE", 1038, "end"]]
+    const heads = [["PLAYER", 46, "start"], ["TOI", 470, "end"], ["G", 535, "end"], ["A", 600, "end"], ["SOG", 670, "end"], ["H-M-L", 765, "end"], ["HD +/-", 845, "end"], ["xGF%", 915, "end"], ["GAME SCORE", 1038, "end"]]
       .map(([t, x, a]) => `<text x="${x}" y="${tableTop - 12}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
     const summary = lines.map(([label, what, val, col], i) => {
       const y = sumTop + 30 + i * 40;
@@ -554,13 +554,13 @@ const GameView = (() => {
       const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
         <text x="46" y="${mid}" font-size="22" fill="${CARD.ink}" ${font}>${esc(r.name)}</text>
-        <text x="330" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
-        ${t(458, toiStr(r.v.toi))}${t(500, r.v.g)}${t(540, r.v.a1 + r.v.a2)}${t(590, r.v.sog)}
-        ${t(676, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
-        ${t(740, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(816, xgf)}
+        <text x="352" y="${mid}" font-size="15" fill="${CARD.muted}" ${font}>${esc(r.pos)}</text>
+        ${t(470, toiStr(r.v.toi))}${t(535, r.v.g)}${t(600, r.v.a1 + r.v.a2)}${t(670, r.v.sog)}
+        ${t(765, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
+        ${t(845, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(915, xgf)}
         ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
     }).join("");
-    const heads = [["PLAYER", 46, "start"], ["TOI", 458, "end"], ["G", 500, "end"], ["A", 540, "end"], ["SOG", 590, "end"], ["H-M-L", 676, "end"], ["HD +/-", 740, "end"], ["xGF%", 816, "end"], ["GAME SCORE", 1038, "end"]]
+    const heads = [["PLAYER", 46, "start"], ["TOI", 470, "end"], ["G", 535, "end"], ["A", 600, "end"], ["SOG", 670, "end"], ["H-M-L", 765, "end"], ["HD +/-", 845, "end"], ["xGF%", 915, "end"], ["GAME SCORE", 1038, "end"]]
       .map(([t, x, a]) => `<text x="${x}" y="${tableTop - 12}" text-anchor="${a}" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>${t}</text>`).join("");
     return { svg: `<text x="56" y="${top}" font-size="30" font-weight="800" fill="${CARD.ink}" ${font}>${esc(team)} skaters <tspan font-weight="400" font-size="20" fill="${CARD.muted}">vs ${esc(opp)}</tspan></text>${heads}${body}`, end: tableTop + rows.length * rh };
   }
