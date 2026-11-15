@@ -440,10 +440,8 @@ const GameView = (() => {
     const status = live ? (g.live.status || "LIVE") : g.oc === "REG" ? "FINAL" : "FINAL/" + g.oc;
     const xa = teamXg(g.shots, 0), xh = teamXg(g.shots, 1);
     const logo = (abbr, x) => (logoUri && logoUri[abbr] ? `<image href="${logoUri[abbr]}" x="${x}" y="108" width="130" height="130" preserveAspectRatio="xMidYMid meet"/>` : `<text x="${x + 65}" y="196" text-anchor="middle" font-size="44" font-weight="800" fill="${CARD.accent}" ${font}>${esc(abbr)}</text>`);
-    const maxAbs = Math.max(3, ...rows.map(r => Math.abs(r.score)));
-    const barScale = 34 / maxAbs;
     const body = rows.map((r, i) => {
-      const y = tableTop + i * rh, mid = y + rh * 0.68, col = r.est ? (r.score >= 0 ? CARD.good : CARD.bad) : gsColor(r.score, "adj"), len = Math.abs(r.score) * barScale;
+      const y = tableTop + i * rh, mid = y + rh * 0.68, col = r.est ? (r.score >= 0 ? CARD.good : CARD.bad) : gsColor(r.score, "adj");
       const xgf = String(pctOf(r.v.xgf, r.v.xga)).replace("&ndash;", "-"), hd = r.v.hdcf - r.v.hdca;
       const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
@@ -452,8 +450,6 @@ const GameView = (() => {
         ${t(458, toiStr(r.v.toi))}${t(500, r.v.g)}${t(540, r.v.a1 + r.v.a2)}${t(590, r.v.sog)}
         ${t(676, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
         ${t(740, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(816, xgf)}
-        <line x1="866" y1="${y + 8}" x2="866" y2="${y + rh - 8}" stroke="${CARD.muted}" stroke-width="1" opacity="0.5"/>
-        <rect x="${r.score >= 0 ? 866 : 866 - len}" y="${y + rh * 0.3}" width="${len}" height="${rh * 0.4}" rx="4" fill="${col}" opacity="0.85"/>
         ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
     }).join("");
     const heads = [["PLAYER", 46, "start"], ["TOI", 458, "end"], ["G", 500, "end"], ["A", 540, "end"], ["SOG", 590, "end"], ["H-M-L", 676, "end"], ["HD +/-", 740, "end"], ["xGF%", 816, "end"], ["GAME SCORE", 1038, "end"]]
@@ -549,11 +545,11 @@ const GameView = (() => {
   const cardNotes = (lines, H) => lines.map((t, k) => `<text x="56" y="${H - 22 * lines.length + 4 + k * 22}" font-size="15" fill="${CARD.muted}" ${CARD_FONT}>${escapeHtml(t)}</text>`).join("");
 
   // ---- card 1: every skater's stats and Game Score, both teams, one image
-  function skaterTableSvg(rows, team, opp, top, maxAbs) {
-    const esc = escapeHtml, font = CARD_FONT, rh = rows.length > 20 ? 38 : 42, tableTop = top + 34, barScale = 34 / maxAbs;
+  function skaterTableSvg(rows, team, opp, top) {
+    const esc = escapeHtml, font = CARD_FONT, rh = rows.length > 20 ? 38 : 42, tableTop = top + 34;
     const pctOf = (a, b) => (a + b > 0 ? (100 * a / (a + b)).toFixed(1) : "&ndash;");
     const body = rows.map((r, i) => {
-      const y = tableTop + i * rh, mid = y + rh * 0.68, col = r.est ? (r.score >= 0 ? CARD.good : CARD.bad) : gsColor(r.score, "adj"), len = Math.abs(r.score) * barScale;
+      const y = tableTop + i * rh, mid = y + rh * 0.68, col = r.est ? (r.score >= 0 ? CARD.good : CARD.bad) : gsColor(r.score, "adj");
       const xgf = String(pctOf(r.v.xgf, r.v.xga)).replace("&ndash;", "-"), hd = r.v.hdcf - r.v.hdca;
       const t = (x, txt, size = 21, fill = CARD.ink, weight = 400) => `<text x="${x}" y="${mid}" text-anchor="end" font-size="${size}" font-weight="${weight}" fill="${fill}" ${font}>${txt}</text>`;
       return `${i % 2 === 0 ? `<rect x="30" y="${y}" width="1020" height="${rh}" rx="8" fill="${CARD.row}"/>` : ""}
@@ -562,8 +558,6 @@ const GameView = (() => {
         ${t(458, toiStr(r.v.toi))}${t(500, r.v.g)}${t(540, r.v.a1 + r.v.a2)}${t(590, r.v.sog)}
         ${t(676, `<tspan fill="${CARD.bad}">${r.v.ihd}</tspan>-<tspan fill="${CARD.accent}">${r.v.imd}</tspan>-<tspan fill="${CARD.muted}">${r.v.ild}</tspan>`, 20)}
         ${t(740, (hd > 0 ? "+" : "") + hd, 21, hd > 0 ? CARD.good : hd < 0 ? CARD.bad : CARD.muted, 700)}${t(816, xgf)}
-        <line x1="866" y1="${y + 8}" x2="866" y2="${y + rh - 8}" stroke="${CARD.muted}" stroke-width="1" opacity="0.5"/>
-        <rect x="${r.score >= 0 ? 866 : 866 - len}" y="${y + rh * 0.3}" width="${len}" height="${rh * 0.4}" rx="4" fill="${col}" opacity="0.85"/>
         ${t(1038, `${r.score > 0 ? "+" : ""}${r.score.toFixed(2)}${r.est ? "*" : ""}`, 24, col, 800)}`;
     }).join("");
     const heads = [["PLAYER", 46, "start"], ["TOI", 458, "end"], ["G", 500, "end"], ["A", 540, "end"], ["SOG", 590, "end"], ["H-M-L", 676, "end"], ["HD +/-", 740, "end"], ["xGF%", 816, "end"], ["GAME SCORE", 1038, "end"]]
@@ -572,8 +566,7 @@ const GameView = (() => {
   }
   function tableCardSvg(g, logoUri) {
     const W = 1080, rowsA = cardSkaterRows(g, "away"), rowsH = cardSkaterRows(g, "home");
-    const maxAbs = Math.max(3, ...rowsA.concat(rowsH).map(r => Math.abs(r.score)));
-    const a = skaterTableSvg(rowsA, g.away, g.home, 474, maxAbs), h = skaterTableSvg(rowsH, g.home, g.away, a.end + 78, maxAbs);
+    const a = skaterTableSvg(rowsA, g.away, g.home, 474), h = skaterTableSvg(rowsH, g.home, g.away, a.end + 78);
     const keyY = h.end + 34, H = keyY + 128;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
       <rect width="${W}" height="${H}" fill="${CARD.bg}"/>
