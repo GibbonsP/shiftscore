@@ -95,14 +95,18 @@ R2_ENDPOINT=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_STATE_BUCKET=sh
 
 ## 9. Email cards (optional)
 
-Visitors pick teams on Home and get one morning email with last night's cards for those teams. The pieces:
+Visitors pick teams on Home and get an email with the cards for their teams' games soon after each game is processed. The pieces:
 
 * `functions/` (Cloudflare Pages Functions, deployed with the site): `/api/subscribe` (sends a confirmation email), `/api/confirm`,
   `/api/unsubscribe` (also the one-click unsubscribe mail apps use), and two secret-protected ones the sender uses
   (`/api/subscribers`, `/api/sent`). Subscribers live in a Workers KV namespace; nobody gets mail before clicking the confirmation link.
-* `ci/send_cards.py` and the **Send cards** workflow (7:30 am Eastern and a retry at 11:30 am): finds last night's finished games,
-  renders the cards in a headless browser from the live site, uploads them to the live bucket under `cards/<date>/`, sends one email per
-  subscriber through Resend, and records who was sent.
+* `ci/send_cards.py` and the **Send cards** workflow: it runs after every **Update site** run. It finds the subscribers who have new
+  cards waiting (a finished game of theirs that is on the site and that they were not sent yet), renders those cards in a headless
+  browser from the live site, uploads them to the live bucket under `cards/<date>/`, sends each subscriber one email with all their new
+  games, and records who got which game. A run with nothing new does nothing.
+* **How soon:** a game is processed about 3.5 hours after the puck drops (about an hour after it ends, once the shift chart is out).
+  **Update site** runs every half hour from 5 pm to 3 am Eastern and every two hours by day, so the cards usually arrive within about
+  an hour and a half of the final horn.
 
 Setup, once:
 
@@ -116,15 +120,16 @@ Setup, once:
    Variables: `SITE_URL` (your Pages address, no trailing slash), `EMAIL_FROM` (same as step 3), `EMAIL_POSTAL` (a mailing address for the
    email footer; anti-spam law requires one, a PO box works), and last, `EMAIL_SIGNUP` = `1` (this shows the signup box on Home).
 5. Push, run **Update site** (this deploys the functions), then test: subscribe yourself on Home, click the confirmation link, and run
-   **Send cards** by hand with a recent date (try the dry-run option first). In the live bucket, a lifecycle rule that deletes
+   **Send cards** by hand (try the dry-run option first). In the live bucket, a lifecycle rule that deletes
    `cards/` after 30 days keeps storage tidy.
 
-Limits: a free Resend plan caps sending at 100 a day, so the job stops at 90 emails (`MAX_EMAILS`) and the rest wait for the next run;
-a paid plan raises the cap. To stop all email, remove the `EMAIL_SIGNUP` variable and disable the **Send cards** workflow.
+Limits: a free Resend plan caps sending at 100 a day, so the job stops at 90 emails a day (`MAX_EMAILS`) and the rest wait for the next
+run; a paid plan raises the cap. A subscriber who follows several teams can get more than one email in a night, one per update. To stop all email, remove the `EMAIL_SIGNUP` variable and disable the **Send cards** workflow.
 
 ## Limits to know
 
-* Cloudflare Pages' free plan allows 500 deploys a month; the update job deploys every two hours (about 360 a month).
+* Cloudflare Pages' free plan allows 500 builds a month (direct uploads like ours may not count, but plan as if they do). A scheduled
+  update run deploys only when it ingested a new game, plus once every two hours, so a busy month stays around 450.
 * GitHub scheduled runs can start a few minutes late, and GitHub pauses scheduled workflows in repositories with no activity
   for 60 days (re-enable them in the Actions tab).
 * The site's per-game files are fetched by the browser on demand; the largest is about 2 MB (the limit is 25 MB).

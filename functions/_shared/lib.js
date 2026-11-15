@@ -1,7 +1,8 @@
 // Shared helpers for the email subscription functions (Cloudflare Pages Functions, see DEPLOY.md "Email cards").
 // Subscribers live in one Workers KV namespace bound to the Pages project as SUBS:
 //   sub:<id>            {email, teams, pendingTeams, confirmed, token, ut, created, confirmedAt}   id = first 32 hex of sha256(lowercased email)
-//   sent:<date>:<id>    "1", kept 14 days: that subscriber already got the digest for that day
+//   sent:<gameId>:<id>  "1", kept 14 days: that subscriber was already emailed that game's cards
+//   count:<UTC date>    how many emails the sending job sent that day (for the daily cap)
 // Secrets and settings (Pages project settings): RESEND_API_KEY, EMAIL_FROM, SEND_SECRET, EMAIL_POSTAL (a mailing address for the footer).
 
 export const TEAMS = ["ANA", "BOS", "BUF", "CGY", "CAR", "CHI", "COL", "CBJ", "DAL", "DET", "EDM", "FLA", "LAK", "MIN", "MTL", "NSH",

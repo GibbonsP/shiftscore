@@ -1,16 +1,16 @@
 name: Send cards
 
-# Emails each subscriber last night's cards for the teams they follow (one digest per subscriber per day). Two starts a morning: the
-# second sends to anyone whose games weren't on the site yet at the first. Setup steps are in DEPLOY.md, "Email cards".
+# Emails each subscriber the cards for their teams' games as soon as the site has them: it runs after every site update, finds the
+# subscribers with new cards waiting, and sends each one email (a run with nothing new does nothing and costs a few seconds).
+# Setup steps are in DEPLOY.md, "Email cards".
 on:
+  workflow_run:
+    workflows: ["Update site"]
+    types: [completed]
   schedule:
-    - cron: "30 12 * * *"        # 7:30 am Eastern (8:30 in summer)
-    - cron: "30 16 * * *"        # a retry later in the morning for games that were not on the site yet
+    - cron: "30 12 * * *"        # a daily catch-up, in case a run was missed
   workflow_dispatch:
     inputs:
-      date:
-        description: "Hockey day to send, YYYY-MM-DD (default: yesterday)"
-        required: false
       dry_run:
         description: "Build everything but send nothing"
         type: boolean
@@ -25,6 +25,7 @@ permissions:
 
 jobs:
   send:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -38,18 +39,24 @@ jobs:
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      DATE: ${{ inputs.date }}
       DRY: ${{ inputs.dry_run }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests boto3 playwright
-      - run: python -m playwright install --with-deps chromium
-      - name: Send the digests
+      - run: pip install requests
+      - name: Is anything waiting to be sent?
+        id: check
+        run: python ci/send_cards.py --check-only
+      - name: Install the browser and uploader
+        if: steps.check.outputs.pending == 'true'
+        run: |
+          pip install boto3 playwright
+          python -m playwright install --with-deps chromium
+      - name: Send the cards
+        if: steps.check.outputs.pending == 'true'
         run: |
           args=""
-          if [ -n "$DATE" ]; then args="$args --date $DATE"; fi
-          if [ "$DRY" = "true" ]; then args="$args --dry-run"; fi
+          if [ "$DRY" = "true" ]; then args="--dry-run"; fi
           python ci/send_cards.py $args

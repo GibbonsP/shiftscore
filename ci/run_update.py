@@ -28,3 +28,7 @@ out = os.environ.get("GITHUB_OUTPUT")
 if out:
     with open(out, "a") as f:
         f.write(f"updated={'true' if event else 'false'}\n")
+        # the first run of an even UTC hour is the two-hourly refresh slot: deploy even when no new game came in (the schedule and scores on the page age)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        f.write(f"slot={'true' if now.hour % 2 == 0 and now.minute < 40 else 'false'}\n")
