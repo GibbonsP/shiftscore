@@ -1248,7 +1248,7 @@ function emailSignupHtml() {
   const teams = Object.keys(TEAM_NAMES).sort((a, b) => TEAM_NAMES[a].localeCompare(TEAM_NAMES[b]));
   return `<section class="subscribe" id="home-subscribe">
     <div class="detail-h3">Get your team's cards by email</div>
-    <div class="panel-caption">Pick your teams and each morning we'll email the cards from last night's games: the skater table, the Game Score bars and the lines, pairs and goalie grades.</div>
+    <div class="panel-caption">Pick your teams and we'll email you the cards for their games shortly after each one ends, usually within an hour or two of the final horn: the skater table, the Game Score bars and the lines, pairs and goalie grades.</div>
     <div class="sub-teams" role="group" aria-label="Teams">${teams.map(t => `<label class="sub-team"><input type="checkbox" data-sub-team="${t}"><span>${logoSpan(t)}${escapeHtml(TEAM_NAMES[t])}</span></label>`).join("")}</div>
     <div class="sub-row">
       <input type="email" class="sub-email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" maxlength="254">

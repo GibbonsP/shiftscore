@@ -11,6 +11,6 @@ export async function onRequestGet({ request, env }) {
   rec.confirmedAt = Date.now();
   rec.token = "";                                                   // a confirmation link works once
   await putSub(env, id, rec);
-  return page("You're subscribed", `<p>You'll get a morning email with the cards from last night's games for <b>${esc(rec.teams.join(", "))}</b>.</p>
+  return page("You're subscribed", `<p>You'll get an email with the cards for <b>${esc(rec.teams.join(", "))}</b> shortly after each of their games, usually within an hour or two of the final horn.</p>
     <p>To change teams, sign up again with the same address. Every email has an unsubscribe link.</p><p><a href="/">Back to Shift Score</a></p>`);
 }
