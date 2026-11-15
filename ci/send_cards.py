@@ -116,7 +116,7 @@ def build_email(sub: dict, games: list[dict], site: str, image_base: str, postal
                       f'<p style="margin:2px 0 0;color:#5b7083;font-size:14px">{esc(nice)}</p>' + "".join(imgs))
     footer_text = ["", f"You get this because you subscribed to cards for {', '.join(followed)} at {site}.", f"Unsubscribe: {unsub}"] + ([postal] if postal else [])
     body = (f'<div style="max-width:620px;margin:0 auto;padding:20px 12px;font-family:Helvetica,Arial,sans-serif;color:#0b1c2c">'
-            f'<h1 style="font:800 26px Helvetica,Arial,sans-serif;margin:0 0 4px">Shift Score</h1>'
+            f'<h1 style="font:800 26px Helvetica,Arial,sans-serif;margin:0 0 4px;color:#0b1c2c">Shift Score</h1>'
             f'<p style="margin:0;color:#5b7083;font-size:16px">{"New cards" if len(games) > 1 else "Your cards"} for {esc(", ".join(followed))}</p>{"".join(blocks)}'
             f'<hr style="border:none;border-top:1px solid #d9e1e4;margin:32px 0 14px">'
             f'<p style="font-size:12px;line-height:1.6;color:#667">You get this because you subscribed to cards for {esc(", ".join(followed))}. '
