@@ -114,13 +114,13 @@ def build_email(sub: dict, games: list[dict], site: str, image_base: str, postal
         text.append("")
         blocks.append(f'<h2 style="font:700 22px Helvetica,Arial,sans-serif;margin:28px 0 0;color:#0b1c2c"><a href="{page}" style="color:#0b1c2c;text-decoration:none">{esc(head)}</a></h2>'
                       f'<p style="margin:2px 0 0;color:#5b7083;font-size:14px">{esc(nice)}</p>' + "".join(imgs))
-    footer_text = ["", f"You get this because you subscribed to cards for {', '.join(followed)} at {site}.", f"Unsubscribe: {unsub}", postal]
+    footer_text = ["", f"You get this because you subscribed to cards for {', '.join(followed)} at {site}.", f"Unsubscribe: {unsub}"] + ([postal] if postal else [])
     body = (f'<div style="max-width:620px;margin:0 auto;padding:20px 12px;font-family:Helvetica,Arial,sans-serif;color:#0b1c2c">'
             f'<h1 style="font:800 26px Helvetica,Arial,sans-serif;margin:0 0 4px">Shift Score</h1>'
             f'<p style="margin:0;color:#5b7083;font-size:16px">{"New cards" if len(games) > 1 else "Your cards"} for {esc(", ".join(followed))}</p>{"".join(blocks)}'
             f'<hr style="border:none;border-top:1px solid #d9e1e4;margin:32px 0 14px">'
             f'<p style="font-size:12px;line-height:1.6;color:#667">You get this because you subscribed to cards for {esc(", ".join(followed))}. '
-            f'<a href="{unsub}" style="color:#667">Unsubscribe</a> &middot; <a href="{site}" style="color:#667">Change teams</a><br>{esc(postal)}</p></div>')
+            f'<a href="{unsub}" style="color:#667">Unsubscribe</a> &middot; <a href="{site}" style="color:#667">Change teams</a>{"<br>" + esc(postal) if postal else ""}</p></div>')
     return {"subject": subject, "html": body, "text": "\n".join(text + footer_text),
             "headers": {"List-Unsubscribe": f"<{unsub}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}}
 
