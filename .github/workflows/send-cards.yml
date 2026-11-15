@@ -25,7 +25,8 @@ permissions:
 
 jobs:
   send:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # does nothing until email is turned on (the EMAIL_SIGNUP variable is 1); a manual run is always allowed, for testing
+    if: github.event_name == 'workflow_dispatch' || (vars.EMAIL_SIGNUP == '1' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
