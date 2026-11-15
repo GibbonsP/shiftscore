@@ -98,6 +98,66 @@ const TABS = [
     ],
   },
   {
+    key: "goalie_avg", label: "Goalie Averages", title: "Goalie Season Averages",
+    caption: "Each goalie's goals saved above expected (GSAx) per game this season: the chance each shot on goal he faced had of scoring, added up, minus the goals he allowed, divided by games played.",
+    cols: [
+      { k: "goalie", label: "Goalie" },
+      { k: "team", label: "Team" },
+      { k: "gp", label: "GP", num: true },
+      { k: "gsax", label: "GSAx", num: true, signed: true, dec: 1 },
+      { k: "gsax_pg", label: "GSAx / game", num: true, signed: true, dec: 2 },
+      { k: "sv_pct", label: "Sv%", num: true },
+    ],
+  },
+  {
+    key: "lines_avg", label: "Lines Averages", title: "Forward Line Season Ratings",
+    caption: "Each forward line's season rating: its Unit Score per 60 minutes together, pulled toward zero as if it had 100 more minutes of average play, so a short stretch can't top the list.",
+    cols: [
+      { k: "unit", label: "Unit" },
+      { k: "team", label: "Team" },
+      { k: "gp", label: "GP", num: true },
+      { k: "toi", label: "TOI", num: true },
+      { k: "rating", label: "Rating / 60", num: true, signed: true, dec: 2 },
+      { k: "avg", label: "Avg / game", num: true, signed: true, dec: 2 },
+    ],
+  },
+  {
+    key: "pairs_avg", label: "D Pairs Averages", title: "Defense Pair Season Ratings",
+    caption: "Each defense pair's season rating: its Unit Score per 60 minutes together, pulled toward zero as if it had 100 more minutes of average play, so a short stretch can't top the list.",
+    cols: [
+      { k: "unit", label: "Unit" },
+      { k: "team", label: "Team" },
+      { k: "gp", label: "GP", num: true },
+      { k: "toi", label: "TOI", num: true },
+      { k: "rating", label: "Rating / 60", num: true, signed: true, dec: 2 },
+      { k: "avg", label: "Avg / game", num: true, signed: true, dec: 2 },
+    ],
+  },
+  {
+    key: "pp_avg", label: "Power Play Averages", title: "Power Play Unit Season Ratings",
+    caption: "Each power-play unit's season rating: its Unit Score per 60 minutes together, pulled toward zero as if it had 100 more minutes of average play, so a short stretch can't top the list.",
+    cols: [
+      { k: "unit", label: "Unit" },
+      { k: "team", label: "Team" },
+      { k: "gp", label: "GP", num: true },
+      { k: "toi", label: "TOI", num: true },
+      { k: "rating", label: "Rating / 60", num: true, signed: true, dec: 2 },
+      { k: "avg", label: "Avg / game", num: true, signed: true, dec: 2 },
+    ],
+  },
+  {
+    key: "pk_avg", label: "Penalty Kill Averages", title: "Penalty Kill Unit Season Ratings",
+    caption: "Each penalty-kill unit's season rating: its Unit Score per 60 minutes together, pulled toward zero as if it had 100 more minutes of average play, so a short stretch can't top the list.",
+    cols: [
+      { k: "unit", label: "Unit" },
+      { k: "team", label: "Team" },
+      { k: "gp", label: "GP", num: true },
+      { k: "toi", label: "TOI", num: true },
+      { k: "rating", label: "Rating / 60", num: true, signed: true, dec: 2 },
+      { k: "avg", label: "Avg / game", num: true, signed: true, dec: 2 },
+    ],
+  },
+  {
     key: "team_stats", label: "Team Stats", title: "Team Leaderboards",
     caption: "Pick a stat to rank all 32 teams by it. The same rankings show next to each stat on every team's page.",
     cols: [],
@@ -240,23 +300,32 @@ const QUALIFIERS = {
   season_xg: { field: "toi_sec", step: 600, label: "Minimum season ice time", fmt: (v) => toiStr(v) },
   goalies: { field: "gp", step: 1, label: "Minimum games played", fmt: (v) => String(v) },
   goalie_games: { field: "sf", step: 1, label: "Minimum shots faced in the game", fmt: (v) => String(v) },
+  goalie_avg: { field: "gp", step: 1, label: "Minimum games played", fmt: (v) => String(v) },
+  lines_avg: { field: "toi_sec", step: 60, label: "Minimum season ice time together", fmt: (v) => toiStr(v) },
+  pairs_avg: { field: "toi_sec", step: 60, label: "Minimum season ice time together", fmt: (v) => toiStr(v) },
+  pp_avg: { field: "toi_sec", step: 30, label: "Minimum season ice time together", fmt: (v) => toiStr(v) },
+  pk_avg: { field: "toi_sec", step: 30, label: "Minimum season ice time together", fmt: (v) => toiStr(v) },
   season_avg: { field: "gp", step: 1, label: "Minimum games played", fmt: (v) => String(v) },
 };
 // Boards with a "worst" side: the export ships ranked best-first lists (and, for the single-game and unit boards, a worst-first list
 // of its own); the season averages and goalies are full lists the page sorts itself.
-const HAS_WORST = new Set(["player_games", "goalie_games", "season_avg", "goalies", "lines", "pairs", "pp", "pk"]);
-const SORT_FIELD = { season_avg: "avg_adjusted", goalies: "gsax" };
+const HAS_WORST = new Set(["player_games", "goalie_games", "goalie_avg", "season_avg", "goalies", "lines", "pairs", "pp", "pk", "lines_avg", "pairs_avg", "pp_avg", "pk_avg"]);
+const SORT_FIELD = { season_avg: "avg_adjusted", goalies: "gsax", goalie_avg: "gsax_pg" };
+const ROWS_SRC = { goalie_avg: "goalies" };   // boards the page sorts itself from another board's rows
 const BOARD_TITLES = {
   player_games: ["Best Single Games", "Worst Single Games"],
   season_avg: ["Best Average Game Scores", "Worst Average Game Scores"],
   goalies: ["Best Goalies by GSAx", "Worst Goalies by GSAx"],
   goalie_games: ["Best Goalie Games", "Worst Goalie Games"],
+  goalie_avg: ["Best Goalie Averages", "Worst Goalie Averages"],
+  lines_avg: ["Best Forward Line Ratings", "Worst Forward Line Ratings"], pairs_avg: ["Best D Pair Ratings", "Worst D Pair Ratings"],
+  pp_avg: ["Best Power Play Unit Ratings", "Worst Power Play Unit Ratings"], pk_avg: ["Best Penalty Kill Unit Ratings", "Worst Penalty Kill Unit Ratings"],
   lines: ["Best Forward Lines", "Worst Forward Lines"], pairs: ["Best D Pairs", "Worst D Pairs"],
   pp: ["Best Power Play Units", "Worst Power Play Units"], pk: ["Best Penalty Kill Units", "Worst Penalty Kill Units"],
 };
 function boardRows(tab, dir) {
   const key = tab.key, worst = dir === "worst" && HAS_WORST.has(key);
-  if (SORT_FIELD[key]) { const f = SORT_FIELD[key]; return (S()[key] || []).slice().sort((a, b) => (worst ? a[f] - b[f] : b[f] - a[f])); }
+  if (SORT_FIELD[key]) { const f = SORT_FIELD[key]; return (S()[ROWS_SRC[key] || key] || []).slice().sort((a, b) => (worst ? a[f] - b[f] : b[f] - a[f])); }
   return worst ? (S()[key + "_worst"] || []) : (S()[key] || []);
 }
 function toiSlider(tab) {
@@ -288,7 +357,7 @@ function renderTable(tab, filterText, minToi, dir, limitRows) {
   for (const c of tab.cols) html += `<th class="${c.num ? "num" : ""}">${c.label}</th>`;
   html += "</tr></thead><tbody>";
   filtered.forEach((row, i) => {
-    const opens = row.pid && row.team && ["player_games", "goalie_games", "season_xg", "season_avg", "goalies"].includes(tab.key);
+    const opens = row.pid && row.team && ["player_games", "goalie_games", "goalie_avg", "season_xg", "season_avg", "goalies"].includes(tab.key);
     html += `<tr${opens ? ` class="clickable" data-open-player="${row.pid}" data-player-team="${row.team}"` : ""}><td class="rank">${i + 1}</td>`;
     for (const c of tab.cols) {
       const val = row[c.k];
@@ -1821,31 +1890,42 @@ function unitsTableHtml(state, lu) {
 }
 
 // --- Leaderboards: the best and worst of the season, side by side. Each section is one ranking, ten rows a side (more on request).
-const LB_SECTIONS = [
-  { key: "player_games", title: "Single games", cols: ["player", "team", "date", "adjusted", "raw"],
-    note: "Adjusted Game Score in one game, players with at least 5:00 of ice time. Adjusted adds credit for the quality of the competition faced and subtracts the average for his position." },
-  { key: "season_avg", title: "Season averages", cols: ["player", "team", "gp", "avg_adjusted", "avg_raw"],
-    note: "Average Adjusted Game Score per game across the season; skaters need at least 10 games in a full season (fewer early on)." },
-  { key: "lines", title: "Forward lines", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, lines with at least 3:00 together." },
-  { key: "pairs", title: "D pairs", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, pairs with at least 3:00 together." },
-  { key: "pp", title: "Power play units", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, power-play units with at least 40 seconds together." },
-  { key: "pk", title: "Penalty kill units", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, penalty-kill units with at least 40 seconds together." },
-  { key: "goalie_games", title: "Goalie games", cols: ["goalie", "date", "opp", "sf", "ga", "gsax"],
-    note: "Goals saved above expected in one game, goalies who faced at least 10 shots. Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse than -1.5." },
-  { key: "goalies", title: "Goalies", cols: ["goalie", "team", "gp", "gsax", "sv_pct"], note: "Goals saved above expected over the season: the chance each shot on goal faced had of scoring, added up, minus goals allowed." },
+const LB_GROUPS = [
+  { key: "skaters", title: "Skaters", parts: [
+    { board: "season_avg", title: "Season averages", cols: ["player", "team", "gp", "avg_adjusted", "avg_raw"],
+      note: "Average Adjusted Game Score per game across the season; skaters need at least 10 games in a full season (fewer early on)." },
+    { board: "player_games", title: "Single games", cols: ["player", "team", "date", "adjusted", "raw"],
+      note: "Adjusted Game Score in one game, players with at least 5:00 of ice time. Adjusted adds credit for the quality of the competition faced and subtracts the average for his position." }] },
+  { key: "goalies", title: "Goalies", parts: [
+    { board: "goalie_avg", title: "Season averages", cols: ["goalie", "team", "gp", "gsax_pg", "sv_pct"], minQual: () => goalieAvgMinGp(),
+      note: "Goals saved above expected per game over the season: the chance each shot on goal faced had of scoring, added up, minus goals allowed, divided by games played. Goalies need at least 10 games in a full season (fewer early on)." },
+    { board: "goalie_games", title: "Single games", cols: ["goalie", "date", "opp", "sf", "ga", "gsax"],
+      note: "Goals saved above expected in one game, goalies who faced at least 10 shots. Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse than -1.5." }] },
+  ...[["lines", "Forward lines", "lines", "3:00", "line"], ["pairs", "D pairs", "pairs", "3:00", "pair"], ["pp", "Power play units", "pp", "40 seconds", "power-play unit"], ["pk", "Penalty kill units", "pk", "40 seconds", "penalty-kill unit"]].map(([k, title, single, min, what]) => ({
+    key: k, title, parts: [
+      { board: k + "_avg", title: "Season averages", cols: ["unit", "team", "gp", "toi", "rating"],
+        note: `Season rating: Unit Score per 60 minutes together, pulled toward zero as if the ${what} had 100 more minutes of average play. Needs a minimum of time together on the season (more as the season goes on).` },
+      { board: single, title: "Single games", cols: ["unit", "team", "date", "score"], note: `Unit Score for one game, ${what}s with at least ${min} together.`.replace("s with", "s with") }] }))
 ];
+// the games a goalie needs for the season-average boards: 10 in a full season, about a third of the busiest goalie's games early on (never under 3),
+// so one relief appearance can't top or bottom the list
+function goalieAvgMinGp() {
+  const most = Math.max(0, ...(S().goalies || []).map(g => g.gp));
+  return Math.min(10, Math.max(3, Math.round(0.35 * most)));
+}
 function leaderboardsHtml(state) {
-  const nav = `<div class="chips board-chips" role="group" aria-label="Jump to">${LB_SECTIONS.map(x => `<button type="button" class="chip" data-lb-jump="${x.key}">${x.title}</button>`).join("")}</div>`;
-  const sections = LB_SECTIONS.map(sec => {
-    const board = BOARDS.find(b => b.key === sec.key);
+  const nav = `<div class="chips board-chips" role="group" aria-label="Jump to">${LB_GROUPS.map(x => `<button type="button" class="chip" data-lb-jump="${x.key}">${x.title}</button>`).join("")}</div>`;
+  const part = (sec) => {
+    const board = BOARDS.find(b => b.key === sec.board);
     if (!board) return "";
     const view = Object.assign({}, board, { cols: sec.cols.map(k => board.cols.find(c => c.k === k)).filter(Boolean) });
-    const more = !!state.more[sec.key], n = more ? 25 : 10;
-    const side = (dir, label) => `<div class="lb-col"><div class="lb-sub">${label}</div><div class="board-table">${renderTable(view, "", 0, dir, n)}</div></div>`;
-    return `<section class="lb-sec" id="lb-${sec.key}"><div class="detail-h3">${sec.title}</div>
+    const more = !!state.more[sec.board], n = more ? 25 : 10;
+    const side = (dir, label) => `<div class="lb-col"><div class="lb-sub">${label}</div><div class="board-table">${renderTable(view, "", sec.minQual ? sec.minQual() : 0, dir, n)}</div></div>`;
+    return `<div class="lb-part"><div class="lb-part-h">${sec.title}</div>
       <div class="lb-pair">${side("best", "Best")}${side("worst", "Worst")}</div>
-      <div class="panel-caption">${sec.note} <button type="button" class="chip" data-lb-more="${sec.key}">${more ? "Show top 10" : "Show top 25"}</button></div></section>`;
-  }).join("");
+      <div class="panel-caption">${sec.note} <button type="button" class="chip" data-lb-more="${sec.board}">${more ? "Show top 10" : "Show top 25"}</button></div></div>`;
+  };
+  const sections = LB_GROUPS.map(grp => `<section class="lb-sec" id="lb-${grp.key}"><div class="detail-h3">${grp.title}</div>${grp.parts.map(part).join("")}</section>`).join("");
   return nav + sections;
 }
 

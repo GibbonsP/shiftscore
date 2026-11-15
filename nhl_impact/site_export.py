@@ -29,7 +29,7 @@ TEAM_JOIN = """JOIN (SELECT home_team_id AS id, home_team_abbrev AS abbrev FROM 
 
 # How many rows of each ranking go into the page. The site shows the top 75 (150 for player games) but lets the
 # viewer raise a minimum-ice-time slider, so it needs a deeper pool to fill the list after low-TOI rows drop out.
-POOL = {"goalie_games": 400, "player_games": 400, "season_xg": 300, "goalies": 150, "units": 300, "season_avg": 1000}
+POOL = {"unit_avg": 300, "goalie_games": 400, "player_games": 400, "season_xg": 300, "goalies": 150, "units": 300, "season_avg": 1000}
 # a game needs this much ice time to count on the single-game boards, and a unit this much to count on the unit boards, so the
 # worst lists are not just a minute of bad luck (the boards' ice-time slider can raise the bar further)
 MIN_GAME_TOI = 300
@@ -42,7 +42,7 @@ def _toi_text(sec) -> str:
     return f"{sec // 60}:{sec % 60:02d}"
 
 
-def leaderboards(conn, unit_keys: set) -> dict:
+def leaderboards(conn, unit_keys: set, units: list | None = None) -> dict:
     def player_games_query(order):
         return rows(
             conn,
@@ -114,7 +114,7 @@ def leaderboards(conn, unit_keys: set) -> dict:
         conn,
         f"""SELECT gs.goalie_id AS pid, p.first_name || ' ' || p.last_name AS goalie, t.abbrev AS team, COUNT(*) AS gp,
                   SUM(shots_faced) AS sf, SUM(goals_allowed) AS ga, ROUND(SUM(xga),1) AS xga,
-                  ROUND(SUM(gsax),1) AS gsax
+                  ROUND(SUM(gsax),1) AS gsax, ROUND(SUM(gsax) / COUNT(*), 2) AS gsax_pg
            FROM goalie_game_stats gs JOIN players p ON p.player_id = gs.goalie_id
            {TEAM_JOIN} ON t.id = gs.team_id
            GROUP BY gs.goalie_id HAVING gp >= {min_gp} ORDER BY gsax DESC LIMIT {POOL['goalies']}""",
@@ -150,6 +150,24 @@ def leaderboards(conn, unit_keys: set) -> dict:
             del r["player_ids"]
         return data
 
+    # season averages for units: the site's unit rating (Score per 60 pulled toward zero by 100 minutes of average play, so a short stretch can't top
+    # the list) for every unit with enough ice time together (a floor that grows over the first 20 games of a season)
+    max_gp = conn.execute("SELECT MAX(c) FROM (SELECT COUNT(*) c FROM (SELECT home_team_id t FROM games UNION ALL SELECT away_team_id t FROM games) GROUP BY t)").fetchone()[0] or 0
+    f = min(1.0, max_gp / 20)
+    floor = {"line": max(300, 1800 * f), "pair": max(300, 1800 * f), "pp": max(60, 300 * f), "pk": max(60, 300 * f)}
+
+    def unit_avg_rows(unit_type, worst=False):
+        out = []
+        for u in units or []:
+            sm = u["summary"]
+            if u["type"] != unit_type or sm["toi_sec"] < floor[unit_type]:
+                continue
+            out.append({"unit_key": u["key"], "team": u["team"], "unit": ", ".join(p["name"] for p in u["players"]), "gp": sm["gp"],
+                        "toi_sec": sm["toi_sec"], "toi": _toi_text(sm["toi_sec"]), "avg": sm["avg_score"], "per60": sm["score_per60"],
+                        "rating": round(sm["score_per60"] * sm["toi_sec"] / (sm["toi_sec"] + 6000), 2)})
+        out.sort(key=lambda r: (r["rating"] if worst else -r["rating"], r["unit_key"]))
+        return out[:POOL["unit_avg"]]
+
     meta = conn.execute("SELECT MIN(game_date), MAX(game_date), COUNT(*) FROM games").fetchone()
     for board in (player_games, player_games_worst, season_xg, season_avg):  # goalies qualify on games played, not ice time
         for r in board:
@@ -161,6 +179,8 @@ def leaderboards(conn, unit_keys: set) -> dict:
         "goalie_games": goalie_games, "goalie_games_worst": goalie_games_worst,
         **{key: unit_rows(t, MIN_UNIT_TOI[t]) for key, t in (("lines", "line"), ("pairs", "pair"), ("pp", "pp"), ("pk", "pk"))},
         **{key + "_worst": unit_rows(t, MIN_UNIT_TOI[t], "ASC") for key, t in (("lines", "line"), ("pairs", "pair"), ("pp", "pp"), ("pk", "pk"))},
+        **{key + "_avg": unit_avg_rows(t) for key, t in (("lines", "line"), ("pairs", "pair"), ("pp", "pp"), ("pk", "pk"))},
+        **{key + "_avg_worst": unit_avg_rows(t, True) for key, t in (("lines", "line"), ("pairs", "pair"), ("pp", "pp"), ("pk", "pk"))},
     }
 
 
@@ -816,7 +836,7 @@ def build_season(conn, pipeline) -> dict:
     """Everything the page needs for one (sliced) season."""
     units = build_units(conn, 1)  # every unit gets a page
     unit_keys = {u["key"] for u in units}
-    board = leaderboards(conn, unit_keys)
+    board = leaderboards(conn, unit_keys, units)
     team_data, teams_index, players_index, unit_data = team_shards(conn, units)
     games = build_games(conn, unit_keys, pipeline)
     game_data, games_index = game_shards(games)
