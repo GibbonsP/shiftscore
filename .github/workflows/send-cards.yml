@@ -1,0 +1,55 @@
+name: Send cards
+
+# Emails each subscriber last night's cards for the teams they follow (one digest per subscriber per day). Two starts a morning: the
+# second sends to anyone whose games weren't on the site yet at the first. Setup steps are in DEPLOY.md, "Email cards".
+on:
+  schedule:
+    - cron: "30 12 * * *"        # 7:30 am Eastern (8:30 in summer)
+    - cron: "30 16 * * *"        # a retry later in the morning for games that were not on the site yet
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Hockey day to send, YYYY-MM-DD (default: yesterday)"
+        required: false
+      dry_run:
+        description: "Build everything but send nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: send-cards
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SITE_URL: ${{ vars.SITE_URL }}
+      EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+      EMAIL_POSTAL: ${{ vars.EMAIL_POSTAL }}
+      LIVE_URL: ${{ vars.LIVE_URL }}
+      R2_LIVE_BUCKET: ${{ vars.R2_LIVE_BUCKET }}
+      SEND_SECRET: ${{ secrets.SEND_SECRET }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      DATE: ${{ inputs.date }}
+      DRY: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests boto3 playwright
+      - run: python -m playwright install --with-deps chromium
+      - name: Send the digests
+        run: |
+          args=""
+          if [ -n "$DATE" ]; then args="$args --date $DATE"; fi
+          if [ "$DRY" = "true" ]; then args="$args --dry-run"; fi
+          python ci/send_cards.py $args

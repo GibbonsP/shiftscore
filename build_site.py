@@ -26,7 +26,9 @@ OG_EXTRA = (f'\n<meta property="og:url" content="{SITE_URL}/">\n<meta property="
             f'\n<meta name="twitter:card" content="summary_large_image">') if SITE_URL else ""
 # set LIVE_URL (a public address that serves index.json and g_<gameId>.json from the live job) to turn on live scores and box scores
 LIVE_URL = os.environ.get("LIVE_URL", "").rstrip("/")
-LIVE_TAG = f'\n<script>window.SHIFTSCORE = {{ liveUrl: "{LIVE_URL}" }};</script>' if LIVE_URL else ""
+# set EMAIL_SIGNUP=1 once the email signup functions are set up (DEPLOY.md, "Email cards") to show the signup box on Home
+SIGNUP = os.environ.get("EMAIL_SIGNUP") == "1"
+LIVE_TAG = f'\n<script>window.SHIFTSCORE = {{ liveUrl: "{LIVE_URL}", signup: {"true" if SIGNUP else "false"} }};</script>' if (LIVE_URL or SIGNUP) else ""
 doc = f"""<!doctype html>
 <html lang="en">
 <head>

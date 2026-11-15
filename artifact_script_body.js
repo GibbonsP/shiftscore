@@ -1239,9 +1239,50 @@ function homeExtrasHtml(D, hasResults) {
     <div><div class="detail-h3">Best goalies <span class="detail-sub">goals saved above expected</span></div>
       <div class="lead-list">${goalies.map((g, i) => leadRow(i + 1, g.pid, g.goalie, g.team, scoreCell(g.gsax), `${g.gp} GP`)).join("")}</div>
       <div class="panel-caption"><a class="row-link" data-goto-tab="goalies">All goalies &rsaquo;</a></div></div></div>` : "";
-  return `${results}${night}${leaders}`;
+  return `${results}${night}${leaders}${emailSignupHtml()}`;
 }
-// The five best Adjusted Game Scores of the night and the five best goalie games (goals saved above expected, 10+ shots), from every game that day.
+// The email signup box (only on the hosted site, and only once the signup functions are set up: build_site.py turns it on with EMAIL_SIGNUP=1).
+// The visitor picks teams and gives an address; /api/subscribe sends a confirmation email, and nothing else is sent before it is clicked.
+function emailSignupHtml() {
+  if (!(window.SHIFTSCORE && window.SHIFTSCORE.signup)) return "";
+  const teams = Object.keys(TEAM_NAMES).sort((a, b) => TEAM_NAMES[a].localeCompare(TEAM_NAMES[b]));
+  return `<section class="subscribe" id="home-subscribe">
+    <div class="detail-h3">Get your team's cards by email</div>
+    <div class="panel-caption">Pick your teams and each morning we'll email the cards from last night's games: the skater table, the Game Score bars and the lines, pairs and goalie grades.</div>
+    <div class="sub-teams" role="group" aria-label="Teams">${teams.map(t => `<label class="sub-team"><input type="checkbox" data-sub-team="${t}"><span>${logoSpan(t)}${escapeHtml(TEAM_NAMES[t])}</span></label>`).join("")}</div>
+    <div class="sub-row">
+      <input type="email" class="sub-email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" maxlength="254">
+      <input type="text" class="sub-hp" id="sub-website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button type="button" class="chip" data-sub-submit="1">Subscribe</button>
+      <button type="button" class="chip" data-sub-clear="1">Clear teams</button>
+    </div>
+    <div class="sub-msg" id="sub-msg" role="status" aria-live="polite"></div>
+    <div class="panel-caption">We send a confirmation email first, nothing before you click it. Every email has a one-click unsubscribe link. Your address is used only for these emails.</div>
+  </section>`;
+}
+async function submitSignup() {
+  const msg = document.getElementById("sub-msg"), btn = document.querySelector("[data-sub-submit]");
+  const email = (document.getElementById("sub-email").value || "").trim();
+  const teams = [...document.querySelectorAll("[data-sub-team]:checked")].map(x => x.dataset.subTeam);
+  const say = (t, bad) => { msg.textContent = t; msg.classList.toggle("bad", !!bad); };
+  if (!teams.length) return say("Pick at least one team.", true);
+  if (!email) return say("Enter your email address.", true);
+  btn.disabled = true; say("Sending…");
+  try {
+    const r = await fetch("/api/subscribe", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, teams, website: document.getElementById("sub-website").value }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.ok) say("Check your inbox: we sent a confirmation link to " + email + ". Click it and you're set.");
+    else say(j.error || "Something went wrong. Try again in a few minutes.", true);
+  } catch (e) { say("Couldn't reach the signup service. Try again in a few minutes.", true); }
+  btn.disabled = false;
+}
+document.addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-sub-submit]")) { submitSignup(); return; }
+  if (ev.target.closest("[data-sub-clear]")) document.querySelectorAll("[data-sub-team]").forEach(x => { x.checked = false; });
+});
+document.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.id === "sub-email") submitSignup(); });
+// The five best Adjusted Game Scores and the five best goalie games (goals saved above expected, 10+ shots), from every game that day.
 async function homeNightFill(token, seasonAtStart) {
   const box = document.getElementById("home-night");
   if (!box) return;

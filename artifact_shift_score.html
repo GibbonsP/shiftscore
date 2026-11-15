@@ -529,6 +529,17 @@ th.sortable:hover { color: var(--accent); }
 .home-tile .live-status { display: flex; justify-content: space-between; align-items: center; }
 .home-tile-more { min-height: 1px; }
 .home-tile .row-link { cursor: pointer; text-decoration: underline; }
+.subscribe { margin-top: 28px; padding: 18px 18px 14px; border: 1px solid var(--line, #cfdbe6); border-radius: 14px; }
+.sub-teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 10px; margin: 12px 0; }
+.sub-team { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.sub-team:hover { background: rgba(80, 140, 200, 0.12); }
+.sub-team input { flex: none; }
+.sub-team span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sub-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.sub-email { flex: 1 1 240px; min-width: 0; font: inherit; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line, #cfdbe6); background: transparent; color: inherit; }
+.sub-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.sub-msg { min-height: 1.4em; margin: 6px 0; font-size: 14px; }
+.sub-msg.bad { color: #d8554a; }
 .home-card-row { grid-column: 1 / -1; padding: 6px 0 14px; }
 .home-card-row[hidden] { display: none; }
 .home-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 22px 26px; align-items: start; }

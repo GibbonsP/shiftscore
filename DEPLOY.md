@@ -93,6 +93,35 @@ pip install boto3
 R2_ENDPOINT=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_STATE_BUCKET=shiftscore-state python3 ci/state.py pull
 ```
 
+## 9. Email cards (optional)
+
+Visitors pick teams on Home and get one morning email with last night's cards for those teams. The pieces:
+
+* `functions/` (Cloudflare Pages Functions, deployed with the site): `/api/subscribe` (sends a confirmation email), `/api/confirm`,
+  `/api/unsubscribe` (also the one-click unsubscribe mail apps use), and two secret-protected ones the sender uses
+  (`/api/subscribers`, `/api/sent`). Subscribers live in a Workers KV namespace; nobody gets mail before clicking the confirmation link.
+* `ci/send_cards.py` and the **Send cards** workflow (7:30 am Eastern and a retry at 11:30 am): finds last night's finished games,
+  renders the cards in a headless browser from the live site, uploads them to the live bucket under `cards/<date>/`, sends one email per
+  subscriber through Resend, and records who was sent.
+
+Setup, once:
+
+1. **Resend** (resend.com, free: 100 emails a day, 3,000 a month): add your domain, put the DNS records it shows (SPF, DKIM) at your
+   registrar, wait for "Verified", then create an API key with sending access.
+2. **A Workers KV namespace**: Cloudflare dashboard, Storage & databases, KV, Create, name it `shiftscore-subs`. Then your Pages project,
+   Settings, Bindings, Add, KV namespace: variable name `SUBS`, namespace `shiftscore-subs` (for Production).
+3. **Pages settings** (the project's Settings, Variables and secrets, Production): `RESEND_API_KEY` (secret, the key from step 1),
+   `EMAIL_FROM` (for example `Shift Score <cards@yourdomain.com>`), `SEND_SECRET` (secret, any long random string you make up).
+4. **GitHub** (repo Settings, Secrets and variables, Actions). Secrets: `SEND_SECRET` (the same string as step 3), `RESEND_API_KEY`.
+   Variables: `SITE_URL` (your Pages address, no trailing slash), `EMAIL_FROM` (same as step 3), `EMAIL_POSTAL` (a mailing address for the
+   email footer; anti-spam law requires one, a PO box works), and last, `EMAIL_SIGNUP` = `1` (this shows the signup box on Home).
+5. Push, run **Update site** (this deploys the functions), then test: subscribe yourself on Home, click the confirmation link, and run
+   **Send cards** by hand with a recent date (try the dry-run option first). In the live bucket, a lifecycle rule that deletes
+   `cards/` after 30 days keeps storage tidy.
+
+Limits: a free Resend plan caps sending at 100 a day, so the job stops at 90 emails (`MAX_EMAILS`) and the rest wait for the next run;
+a paid plan raises the cap. To stop all email, remove the `EMAIL_SIGNUP` variable and disable the **Send cards** workflow.
+
 ## Limits to know
 
 * Cloudflare Pages' free plan allows 500 deploys a month; the update job deploys every two hours (about 360 a month).

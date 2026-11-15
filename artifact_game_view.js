@@ -627,7 +627,7 @@ const GameView = (() => {
       <text x="1040" y="${firstTop + 6}" text-anchor="end" font-size="14" letter-spacing="1.2" fill="${CARD.muted}" ${font}>GAME SCORE</text>`;
     // the key: what each color is, and the tick
     let kx = 56; const legendY = y + 10;
-    const legend = BAR_PARTS.map(([name, col]) => { const x = kx; kx += 40 + name.length * 9.2; return `<rect x="${x}" y="${legendY - 9}" width="18" height="18" fill="${col}"/><text x="${x + 26}" y="${legendY + 5}" font-size="16" fill="${CARD.muted}" ${font}>${name}</text>`; }).join("")
+    const legend = BAR_PARTS.map(([name, col]) => { const x = kx; kx += 40 + name.length * 9.2; return `<rect x="${x}" y="${legendY - 9}" width="18" height="18" fill="${col}"/><text x="${x + 26}" y="${legendY + 5}" font-size="16" fill="${CARD.muted}" ${font}>${esc(name)}</text>`; }).join("")
       + `<rect x="${kx}" y="${legendY - 11}" width="4" height="22" rx="2" fill="#ffffff"/><text x="${kx + 14}" y="${legendY + 5}" font-size="16" fill="${CARD.muted}" ${font}>Net (Adjusted Game Score)</text>`;
     const keyY = legendY + 44, H = keyY + 128;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 ${H}" width="1080" height="${H}">
@@ -1358,6 +1358,12 @@ const GameView = (() => {
     tileStats,
     nightStars,
     card: (g, key, logos) => { const { kind, side } = parseCardKey(key); return shareSvg(kind, g, side, logos || null); },
+    // the card as a PNG data URL (the email job renders cards through this in a headless browser)
+    cardPngDataUrl: async (g, key, logos) => {
+      const { kind, side } = parseCardKey(key), svg = shareSvg(kind, g, side, logos || null), [, W, H] = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
+      const blob = await cardPng(svg, +W, +H);
+      return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+    },
     saveCard: (g, key, logos) => { const { kind, side } = parseCardKey(key); return saveCardImage(shareSvg(kind, g, side, logos || null), cardFileName(g, kind, side)); },
   };
 })();

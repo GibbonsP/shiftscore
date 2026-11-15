@@ -25,6 +25,7 @@ jobs:
       R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
       SITE_URL: ${{ vars.SITE_URL }}
       LIVE_URL: ${{ vars.LIVE_URL }}
+      EMAIL_SIGNUP: ${{ vars.EMAIL_SIGNUP }}
     steps:
       - uses: actions/checkout@v4
 
