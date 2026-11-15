@@ -19,7 +19,7 @@ export async function onRequestPost({ request, env }) {
   const now = Date.now();
   const rec = (await getSub(env, id)) || { email, teams: [], confirmed: false, ut: randomToken(), created: now };
   // one confirmation email per address every ten minutes, so the form can't be used to flood someone's inbox
-  if (rec.lastRequest && now - rec.lastRequest < 10 * 60 * 1000) return json({ ok: true });
+  if (rec.lastRequest && now - rec.lastRequest < 10 * 60 * 1000) return json({ ok: true, again: true });   // `again`: nothing new was sent; the form says so
   rec.pendingTeams = teams;
   rec.token = randomToken();
   rec.lastRequest = now;

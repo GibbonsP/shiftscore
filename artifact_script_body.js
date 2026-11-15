@@ -1271,7 +1271,8 @@ async function submitSignup() {
     const r = await fetch("/api/subscribe", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, teams }) });
     const j = await r.json().catch(() => ({}));
-    if (r.ok && j.ok) say("Check your inbox: we sent a confirmation link to " + email + ". Click it and you're set.");
+    if (r.ok && j.ok && j.again) say("We already sent a confirmation link to " + email + " in the last ten minutes, so we didn't send another. Check your inbox and spam folder, or try again in a few minutes.");
+    else if (r.ok && j.ok) say("Check your inbox: we sent a confirmation link to " + email + ". Click it and you're set.");
     else say(j.error || "Something went wrong. Try again in a few minutes.", true);
   } catch (e) { say("Couldn't reach the signup service. Try again in a few minutes.", true); }
   btn.disabled = false;
