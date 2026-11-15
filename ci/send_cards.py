@@ -167,7 +167,10 @@ def main():
     args = ap.parse_args()
     env = os.environ
     site = env["SITE_URL"].rstrip("/")
+    # LIVE_URL is the address of the live-scores folder (.../live); the card images sit at the bucket root, next to it
     image_base = env.get("LIVE_URL", "").rstrip("/")
+    if image_base.endswith("/live"):
+        image_base = image_base[: -len("/live")]
     postal = env.get("EMAIL_POSTAL", "")
 
     games = [g for d in recent_dates() for g in finished_games(d)]
