@@ -33,6 +33,10 @@ export async function onRequestPost({ request, env }) {
     text: `Confirm that you want to ${what} (${teams.join(", ")}):\n\n${link}\n\nIf you didn't ask for this, ignore this email and nothing will happen.`,
     html: `<p>Confirm that you want to ${what} (<b>${esc(teams.join(", "))}</b>):</p><p><a href="${link}" style="background:#12304a;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;display:inline-block">Confirm</a></p><p style="color:#667">If you didn't ask for this, ignore this email and nothing will happen.</p>`,
   });
-  if (!ok) return json({ ok: false, error: "We couldn't send the confirmation email. Try again in a few minutes." }, 502);
+  if (!ok) {
+    rec.lastRequest = 0;                                          // a send that failed doesn't count against the ten-minute limit
+    await putSub(env, id, rec);
+    return json({ ok: false, error: "We couldn't send the confirmation email. Try again in a few minutes." }, 502);
+  }
   return json({ ok: true });
 }

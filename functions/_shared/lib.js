@@ -60,6 +60,7 @@ export async function sendEmail(env, { to, subject, html, text, headers }) {
     headers: { authorization: "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
     body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, html, text, headers }),
   });
+  if (!r.ok) console.error("Resend refused the email:", r.status, (await r.text()).slice(0, 300));   // shows in the Pages function logs
   return r.ok;
 }
 
