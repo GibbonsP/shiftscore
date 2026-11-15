@@ -82,6 +82,22 @@ const TABS = [
     ],
   },
   {
+    key: "goalie_games", label: "Goalie Games", title: "Top Goalie Games",
+    caption: "Single games by a goalie, ranked by GSAx (Goals Saved Above Expected): the chance each shot on goal he faced had of scoring, added up, minus the goals he allowed. Goalies who faced at least 10 shots.",
+    cols: [
+      { k: "goalie", label: "Goalie" },
+      { k: "team", label: "Team" },
+      { k: "date", label: "Date" },
+      { k: "opp", label: "Opp" },
+      { k: "sf", label: "Shots", num: true },
+      { k: "ga", label: "GA", num: true },
+      { k: "xga", label: "xGA", num: true, dec: 2 },
+      { k: "gsax", label: "GSAx", num: true, signed: true },
+      { k: "sv_pct", label: "Sv%", num: true },
+      { k: "grade", label: "Grade" },
+    ],
+  },
+  {
     key: "team_stats", label: "Team Stats", title: "Team Leaderboards",
     caption: "Pick a stat to rank all 32 teams by it. The same rankings show next to each stat on every team's page.",
     cols: [],
@@ -223,16 +239,18 @@ const QUALIFIERS = {
   pk: { field: "toi_sec", step: 10, label: "Minimum ice time together in the game", fmt: (v) => toiStr(v) },
   season_xg: { field: "toi_sec", step: 600, label: "Minimum season ice time", fmt: (v) => toiStr(v) },
   goalies: { field: "gp", step: 1, label: "Minimum games played", fmt: (v) => String(v) },
+  goalie_games: { field: "sf", step: 1, label: "Minimum shots faced in the game", fmt: (v) => String(v) },
   season_avg: { field: "gp", step: 1, label: "Minimum games played", fmt: (v) => String(v) },
 };
 // Boards with a "worst" side: the export ships ranked best-first lists (and, for the single-game and unit boards, a worst-first list
 // of its own); the season averages and goalies are full lists the page sorts itself.
-const HAS_WORST = new Set(["player_games", "season_avg", "goalies", "lines", "pairs", "pp", "pk"]);
+const HAS_WORST = new Set(["player_games", "goalie_games", "season_avg", "goalies", "lines", "pairs", "pp", "pk"]);
 const SORT_FIELD = { season_avg: "avg_adjusted", goalies: "gsax" };
 const BOARD_TITLES = {
   player_games: ["Best Single Games", "Worst Single Games"],
   season_avg: ["Best Average Game Scores", "Worst Average Game Scores"],
   goalies: ["Best Goalies by GSAx", "Worst Goalies by GSAx"],
+  goalie_games: ["Best Goalie Games", "Worst Goalie Games"],
   lines: ["Best Forward Lines", "Worst Forward Lines"], pairs: ["Best D Pairs", "Worst D Pairs"],
   pp: ["Best Power Play Units", "Worst Power Play Units"], pk: ["Best Penalty Kill Units", "Worst Penalty Kill Units"],
 };
@@ -270,7 +288,7 @@ function renderTable(tab, filterText, minToi, dir, limitRows) {
   for (const c of tab.cols) html += `<th class="${c.num ? "num" : ""}">${c.label}</th>`;
   html += "</tr></thead><tbody>";
   filtered.forEach((row, i) => {
-    const opens = row.pid && row.team && ["player_games", "season_xg", "season_avg", "goalies"].includes(tab.key);
+    const opens = row.pid && row.team && ["player_games", "goalie_games", "season_xg", "season_avg", "goalies"].includes(tab.key);
     html += `<tr${opens ? ` class="clickable" data-open-player="${row.pid}" data-player-team="${row.team}"` : ""}><td class="rank">${i + 1}</td>`;
     for (const c of tab.cols) {
       const val = row[c.k];
@@ -279,6 +297,8 @@ function renderTable(tab, filterText, minToi, dir, limitRows) {
       else if ((c.k === "player" || c.k === "goalie") && row.pid) text = avatarSpan(row.pid, val) + escapeHtml(val);   // headshot, or initials until it loads
       else if (c.k === "team" && val) text = logoSpan(val) + escapeHtml(val);
       else if (c.k === "date" && row.gid) text = gameLink(row.gid, row.home, val);
+      else if (c.k === "opp" && val) text = `<span class="detail-sub">${escapeHtml(row.loc || "")}</span> ${logoSpan(val)}${escapeHtml(val)}`;
+      else if (c.k === "grade" && typeof row.gsax === "number") text = gradeChip(goalieGrade(row.gsax));
       else if (typeof val === "number" && c.gs) text = gsCell(val, c.gs, true);
       else if (typeof val === "number" && (c.dec || c.signed)) text = (c.signed && val > 0 ? "+" : "") + val.toFixed(c.dec || 2);   // scores always show two decimals (-2 reads as -2.00)
       else text = escapeHtml(fmt(val, c.signed));
@@ -1074,9 +1094,9 @@ function playerDetailHtml(playerId, teamData, sec) {
       ["Shots faced", "Goals allowed", "Sv%", "xGA", "GSAx"].map((label, k) => [label, ...cols.map(c => cell(c, k)), cell(tot, k)]));
   })() : "";
   const log = statTable(
-    [{ label: "Date" }, { label: "Team" }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
+    [{ label: "Date" }, { label: "Team" }, { label: "Opp" }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
      { label: "QoC", num: true }, { label: "QoT", num: true }, { label: "Adjusted", num: true }, { label: "ixG", num: true }],
-    p.game_log.map(g => [gameLink(g.gid, g.home, g.date), g.team, g.goals, g.a1, g.a2, gsCell(g.raw, gsKind(posHere, false), false),
+    p.game_log.map(g => [gameLink(g.gid, g.home, g.date), g.team, g.opp ? `<span class="detail-sub">${escapeHtml(g.loc || "")}</span> ${logoSpan(g.opp)}${escapeHtml(g.opp)}` : "&ndash;", g.goals, g.a1, g.a2, gsCell(g.raw, gsKind(posHere, false), false),
       g.qoc, g.qot, gsCell(g.adjusted, "adj", true), g.ixg])
   );
   const isGoalie = (teamData.goalies || []).some(g => String(g.player_id) === String(playerId));
@@ -1810,6 +1830,8 @@ const LB_SECTIONS = [
   { key: "pairs", title: "D pairs", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, pairs with at least 3:00 together." },
   { key: "pp", title: "Power play units", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, power-play units with at least 40 seconds together." },
   { key: "pk", title: "Penalty kill units", cols: ["unit", "team", "date", "score"], note: "Unit Score for one game, penalty-kill units with at least 40 seconds together." },
+  { key: "goalie_games", title: "Goalie games", cols: ["goalie", "date", "opp", "sf", "ga", "gsax"],
+    note: "Goals saved above expected in one game, goalies who faced at least 10 shots. Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse than -1.5." },
   { key: "goalies", title: "Goalies", cols: ["goalie", "team", "gp", "gsax", "sv_pct"], note: "Goals saved above expected over the season: the chance each shot on goal faced had of scoring, added up, minus goals allowed." },
 ];
 function leaderboardsHtml(state) {

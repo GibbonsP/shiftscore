@@ -126,6 +126,12 @@ Setup, once:
 Limits: a free Resend plan caps sending at 100 a day, so the job stops at 90 emails a day (`MAX_EMAILS`) and the rest wait for the next
 run; a paid plan raises the cap. A subscriber who follows several teams can get more than one email in a night, one per update. To stop all email, remove the `EMAIL_SIGNUP` variable and disable the **Send cards** workflow.
 
+## Rebuilding every season's data in the cloud
+
+A normal update only rebuilds the teams that had a new game. After a change to what the data files contain (a new column, a new board),
+run **Update site** by hand with **Rebuild every season's data files** ticked: it rebuilds all seasons from the cloud's own database,
+deploys, and saves the new state. No upload from the Mac is needed for this.
+
 ## Limits to know
 
 * Cloudflare Pages' free plan allows 500 builds a month (direct uploads like ours may not count, but plan as if they do). A scheduled

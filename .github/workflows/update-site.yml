@@ -9,6 +9,11 @@ on:
     - cron: "17 8-20/2 * * *"
     - cron: "17,47 22-23,0-7 * * *"
   workflow_dispatch:
+    inputs:
+      full_rebuild:
+        description: "Rebuild every season's data files from the stored database (do this after a change to what the data files contain)"
+        type: boolean
+        default: false
 
 concurrency:
   group: site-update
@@ -43,6 +48,10 @@ jobs:
       - name: Restore state (database and last build)
         run: python ci/state.py pull
 
+      - name: Full rebuild of every season (only when asked for)
+        if: inputs.full_rebuild
+        run: python build_artifact.py
+
       - name: Ingest finished games and rebuild
         id: update
         run: python ci/run_update.py
@@ -58,6 +67,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy site --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main --commit-dirty=true
 
-      - name: Save state (only when new games were ingested)
-        if: steps.update.outputs.updated == 'true'
+      - name: Save state (when new games were ingested or after a full rebuild)
+        if: steps.update.outputs.updated == 'true' || inputs.full_rebuild
         run: python ci/state.py push

@@ -29,10 +29,11 @@ TEAM_JOIN = """JOIN (SELECT home_team_id AS id, home_team_abbrev AS abbrev FROM 
 
 # How many rows of each ranking go into the page. The site shows the top 75 (150 for player games) but lets the
 # viewer raise a minimum-ice-time slider, so it needs a deeper pool to fill the list after low-TOI rows drop out.
-POOL = {"player_games": 400, "season_xg": 300, "goalies": 150, "units": 300, "season_avg": 1000}
+POOL = {"goalie_games": 400, "player_games": 400, "season_xg": 300, "goalies": 150, "units": 300, "season_avg": 1000}
 # a game needs this much ice time to count on the single-game boards, and a unit this much to count on the unit boards, so the
 # worst lists are not just a minute of bad luck (the boards' ice-time slider can raise the bar further)
 MIN_GAME_TOI = 300
+MIN_GOALIE_GAME_SF = 10   # a goalie game needs at least this many shots on goal to make the single-game boards (a relief appearance of a few shots says nothing)
 MIN_UNIT_TOI = {"line": 180, "pair": 180, "pp": 40, "pk": 40}
 
 
@@ -58,6 +59,25 @@ def leaderboards(conn, unit_keys: set) -> dict:
                ORDER BY pgi.adjusted_impact {order} LIMIT {POOL['player_games']}""",
         )
     player_games, player_games_worst = player_games_query("DESC"), player_games_query("ASC")
+    def goalie_games_query(order):
+        data = rows(
+            conn,
+            f"""SELECT gs.goalie_id AS pid, p.first_name || ' ' || p.last_name AS goalie, t.abbrev AS team, gm.game_date AS date,
+                      CASE WHEN gm.home_team_id = gs.team_id THEN gm.away_team_abbrev ELSE gm.home_team_abbrev END AS opp,
+                      CASE WHEN gm.home_team_id = gs.team_id THEN 'vs' ELSE '@' END AS loc,
+                      gs.shots_faced AS sf, gs.goals_allowed AS ga, ROUND(gs.xga,2) AS xga, ROUND(gs.gsax,2) AS gsax,
+                      gm.game_id AS gid, gm.home_team_abbrev AS home
+               FROM goalie_game_stats gs
+               JOIN players p ON p.player_id = gs.goalie_id
+               JOIN games gm ON gm.game_id = gs.game_id
+               {TEAM_JOIN} ON t.id = gs.team_id
+               WHERE gs.shots_faced >= {MIN_GOALIE_GAME_SF}
+               ORDER BY gs.gsax {order}, gs.game_id LIMIT {POOL['goalie_games']}""",
+        )
+        for r in data:
+            r["sv_pct"] = round((r["sf"] - r["ga"]) / r["sf"], 3) if r["sf"] else 0
+        return data
+    goalie_games, goalie_games_worst = goalie_games_query("DESC"), goalie_games_query("ASC")
     n_games = conn.execute("SELECT COUNT(*) FROM games").fetchone()[0]
     min_gp = 10 if n_games > 600 else 1  # in-progress seasons: don't hide everyone behind a GP floor
 
@@ -138,6 +158,7 @@ def leaderboards(conn, unit_keys: set) -> dict:
         "meta": {"start": meta[0], "end": meta[1], "games": meta[2]},
         "player_games": player_games, "player_games_worst": player_games_worst, "season_xg": season_xg, "season_avg": season_avg,
         "goalies": goalies,
+        "goalie_games": goalie_games, "goalie_games_worst": goalie_games_worst,
         **{key: unit_rows(t, MIN_UNIT_TOI[t]) for key, t in (("lines", "line"), ("pairs", "pair"), ("pp", "pp"), ("pk", "pk"))},
         **{key + "_worst": unit_rows(t, MIN_UNIT_TOI[t], "ASC") for key, t in (("lines", "line"), ("pairs", "pair"), ("pp", "pp"), ("pk", "pk"))},
     }
@@ -181,7 +202,9 @@ def _player_summary_and_log(conn, player_id, home_by_game):
         f"""SELECT gm.game_date AS date, t.abbrev AS team, pgs.goals, pgs.primary_assists + pgs.secondary_assists AS assists,
                   pgs.primary_assists AS a1, pgs.secondary_assists AS a2,
                   ROUND(pgi.raw_game_score,2) AS raw, ROUND(pgi.qoc,2) AS qoc, ROUND(pgi.qot,2) AS qot,
-                  ROUND(pgi.adjusted_impact,2) AS adjusted, ROUND(pgs.ixg,2) AS ixg, gm.game_id AS gid
+                  ROUND(pgi.adjusted_impact,2) AS adjusted, ROUND(pgs.ixg,2) AS ixg, gm.game_id AS gid,
+                  CASE WHEN gm.home_team_id = pgs.team_id THEN gm.away_team_abbrev ELSE gm.home_team_abbrev END AS opp,
+                  CASE WHEN gm.home_team_id = pgs.team_id THEN 'vs' ELSE '@' END AS loc
            FROM player_game_impact pgi
            JOIN players pl ON pl.player_id = pgi.player_id
            JOIN player_game_stats pgs ON pgs.game_id = pgi.game_id AND pgs.player_id = pgi.player_id
