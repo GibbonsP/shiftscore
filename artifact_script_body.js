@@ -1252,7 +1252,6 @@ function emailSignupHtml() {
     <div class="sub-teams" role="group" aria-label="Teams">${teams.map(t => `<label class="sub-team"><input type="checkbox" data-sub-team="${t}"><span>${logoSpan(t)}${escapeHtml(TEAM_NAMES[t])}</span></label>`).join("")}</div>
     <div class="sub-row">
       <input type="email" class="sub-email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" maxlength="254">
-      <input type="text" class="sub-hp" id="sub-trap" name="sub-trap" tabindex="-1" autocomplete="off" data-lpignore="true" data-1p-ignore="true" aria-hidden="true">
       <button type="button" class="chip" data-sub-submit="1">Subscribe</button>
       <button type="button" class="chip" data-sub-clear="1">Clear teams</button>
     </div>
@@ -1270,7 +1269,7 @@ async function submitSignup() {
   btn.disabled = true; say("Sending…");
   try {
     const r = await fetch("/api/subscribe", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, teams, website: document.getElementById("sub-trap").value }) });
+      body: JSON.stringify({ email, teams }) });
     const j = await r.json().catch(() => ({}));
     if (r.ok && j.ok) say("Check your inbox: we sent a confirmation link to " + email + ". Click it and you're set.");
     else say(j.error || "Something went wrong. Try again in a few minutes.", true);
