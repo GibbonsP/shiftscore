@@ -989,6 +989,11 @@ th.sortable.has-tip { cursor: pointer; }
 }
 
 /* game preview */
+.pred-bar { display: flex; height: 38px; border-radius: 10px; overflow: hidden; font-weight: 800; color: #fff; }
+.pred-bar span { display: flex; align-items: center; padding: 0 12px; white-space: nowrap; overflow: hidden; }
+.pred-a { background: #4a6785; } .pred-h { background: var(--red, #d8433a); justify-content: flex-end; }
+.pred-facts { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 6px; font-size: 14.5px; }
+
 .pv-head { margin: 4px 0 8px; }
 .pv-matchup { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
 .pv-team { min-width: 0; } .pv-name { font-size: 22px; font-weight: 800; } .pv-at { color: var(--muted); align-self: center; font-weight: 600; }
