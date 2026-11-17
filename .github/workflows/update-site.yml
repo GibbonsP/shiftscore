@@ -27,7 +27,22 @@ permissions:
   contents: read
 
 jobs:
+  # a ten-second check first: at night with no game in progress or just finished, the real job is skipped
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      work: ${{ steps.gate.outputs.work }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: gate
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: python ci/gate.py
+
   update:
+    needs: gate
+    if: needs.gate.outputs.work == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
