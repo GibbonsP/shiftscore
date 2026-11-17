@@ -1237,12 +1237,11 @@ const rankTag = (r) => (r ? ` <small class="detail-sub">${ordinal(r)}</small>` :
 
 
 // Game prediction: 20,000 simulated games from each team's expected-goals ratings. A team's attack and defense are its expected goals for and
-// against in recent games (older games count less, 5% per game), pulled toward the league average, with a small home edge. Two adjustments, each
-// kept only because it helped in testing: the likely starting goalie (last game's starter, or the other goalie on the second night of a back-to-back;
-// his goals saved above expected per start, pulled toward zero, comes off what the other team scores), and an away team on the second night of a
-// back-to-back scores less. Goals are drawn from Poisson distributions; a tie after 60 minutes is an overtime/shootout coin flip.
+// against in recent games (older games count less, 5% per game), pulled toward the league average, with a small home edge. One adjustment, kept
+// because it helped in testing: an away team on the second night of a back-to-back scores less. Goalies are left out for now (starters are
+// confirmed on game day, so a guess from recent usage added little); the tested goalie version is in scratch/pred_backtest2.py. Goals are drawn from Poisson distributions; a tie after 60 minutes is an overtime/shootout coin flip.
 // Tested on every game since 2024-25 using only what was known before each game (scratch/pred_backtest2.py); it beat always picking the home team.
-const PRED = { decay: 0.95, shrink: 10, home: 1.03, sims: 20000, goalieShrink: 16, goalieWeight: 0.5, awayB2b: 0.90 };
+const PRED = { decay: 0.95, shrink: 10, home: 1.03, sims: 20000, awayB2b: 0.90 };
 async function predictGame(gid, date, away, home, ta, th) {
   const rows = (S().teams_index || []).filter(t => t.gp && t.xgf !== null && t.xgf !== undefined);
   if (!rows.length) return null;
@@ -1256,24 +1255,6 @@ async function predictGame(gid, date, away, home, ta, th) {
     return { f: (f + PRED.shrink * L) / (w + PRED.shrink), a: (a + PRED.shrink * L) / (w + PRED.shrink) }; };
   const A = rate(ta, pA), H = rate(th, pH);
   let lh = PRED.home * H.f * A.a / L, la = A.f * H.a / (PRED.home * L);
-  const gs = DATA.goalie_hist || {};
-  const quality = (pid) => { const e = gs[String(pid)]; return e ? e[0] / (e[1] + PRED.goalieShrink) : 0; };
-  const likely = (td, ptd) => {
-    const hist = [...(ptd ? ptd.schedule : []), ...td.schedule].filter(r => r.gk);
-    if (!hist.length) return null;
-    const lastRow = td.schedule[td.schedule.length - 1], lastPid = hist[hist.length - 1].gk[0];
-    let pid = lastPid;
-    if (lastRow && dayDiff(lastRow.date, date) === 1) {   // second night: the other goalie is likelier
-      const cnt = {}; hist.forEach(r => { cnt[r.gk[0]] = (cnt[r.gk[0]] || 0) + 1; });
-      const others = Object.entries(cnt).filter(([k]) => Number(k) !== lastPid).sort((x, y) => y[1] - x[1]);
-      if (others.length) pid = Number(others[0][0]);
-    }
-    const g = [...(td.goalies || []), ...((ptd && ptd.goalies) || [])].find(x => x.player_id === pid);
-    return { pid, name: g ? g.name : "", q: quality(pid) };
-  };
-  const gA = likely(ta, pA), gH = likely(th, pH);
-  if (gA) lh = Math.max(0.3, lh - gA.q * PRED.goalieWeight);
-  if (gH) la = Math.max(0.3, la - gH.q * PRED.goalieWeight);
   const lastA = ta.schedule[ta.schedule.length - 1], b2bAway = !!lastA && dayDiff(lastA.date, date) === 1;
   if (b2bAway) { la *= PRED.awayB2b; lh /= Math.sqrt(PRED.awayB2b); }
   let seed = Number(gid) >>> 0;   // the same game always simulates the same way
@@ -1287,20 +1268,19 @@ async function predictGame(gid, date, away, home, ta, th) {
     hg += x; ag += y; const key = y + "-" + x; scores[key] = (scores[key] || 0) + 1;   // away-home
   }
   const top = Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => ({ score: k, p: n / PRED.sims }));
-  return { home: hw / PRED.sims, away: 1 - hw / PRED.sims, ot: ot / PRED.sims, hg: hg / PRED.sims, ag: ag / PRED.sims, top, gA, gH, b2bAway };
+  return { home: hw / PRED.sims, away: 1 - hw / PRED.sims, ot: ot / PRED.sims, hg: hg / PRED.sims, ag: ag / PRED.sims, top, b2bAway };
 }
 async function predictionHtml(sch, ta, th) {
   const away = sch[2], home = sch[3], r = await predictGame(sch[0], sch[1], away, home, ta, th);
   if (!r) return "";
   const pa = Math.round(100 * r.away), ph = 100 - pa;
   const fav = r.home >= r.away ? home : away, pf = Math.max(pa, ph);
-  const gl = [[away, r.gA], [home, r.gH]].filter(x => x[1] && x[1].name).map(([t, g]) => `${t} ${escapeHtml(g.name)}`).join(", ");
   return `<div class="detail-h3">Prediction <span class="detail-sub">20,000 simulated games</span></div>
     <div class="pred"><div class="pred-bar" role="img" aria-label="${away} ${pa}%, ${home} ${ph}%"><span class="pred-a" style="width:${pa}%">${away} ${pa}%</span><span class="pred-h" style="width:${ph}%">${home} ${ph}%</span></div>
     <div class="pred-facts"><span>${pf < 53 ? "<b>Toss-up</b>, no clear favorite" : `<b>${teamName(fav)}</b> favored, ${pf}%`}</span><span>Projected score: ${away} ${r.ag.toFixed(1)}, ${home} ${r.hg.toFixed(1)}</span>
     <span>Overtime or shootout in ${Math.round(100 * r.ot)}% of games</span><span>Likeliest finals: ${r.top.map(t => `${away} ${t.score.split("-")[0]}, ${home} ${t.score.split("-")[1]} (${Math.round(100 * t.p)}%)`).join("; ")}</span>
-    ${gl ? `<span>Goalies assumed: ${gl}</span>` : ""}${r.b2bAway ? `<span>${away} is on the second night of a back-to-back, which the model counts against them.</span>` : ""}</div>
-    <div class="panel-caption">Built from each team's recent expected goals, a small home edge, the likely starting goalies (starters are not announced until game day, so this is a guess from recent usage) and the second night of a back-to-back for the road team. It does not know injuries or lineup changes. Hockey games are close to coin flips: in testing on every game since 2024-25 it picked the winner a bit more than half the time and beat always picking the home team, so treat the percentages as a lean, not a lock.</div></div>`;
+    ${r.b2bAway ? `<span>${away} is on the second night of a back-to-back, which the model counts against them.</span>` : ""}</div>
+    <div class="panel-caption">Built from each team's recent expected goals, a small home edge and the second night of a back-to-back for the road team. It does not know who is starting in goal, injuries or lineup changes. Hockey games are close to coin flips: in testing on every game since 2024-25 it picked the winner a bit more than half the time and beat always picking the home team, so treat the percentages as a lean, not a lock.</div></div>`;
 }
 function previewHeaderHtml(sch, ta, th) {
   const [, date, away, home, start] = sch;
