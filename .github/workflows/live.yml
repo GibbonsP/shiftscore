@@ -9,6 +9,7 @@ on:
     - cron: "30 0 * * *"         # 7:30 pm Eastern: a backstop in case the first start stopped early or was skipped
     - cron: "5 3 * * *"          # 11:05 pm Eastern: the late games
     - cron: "40 16 * * 0,6"      # weekend afternoons
+    - cron: "22,52 17-23,0-8 * * *"   # extra starts all evening: GitHub drops or delays some, and a start while one is running just waits (see concurrency)
   workflow_dispatch:
 
 concurrency:

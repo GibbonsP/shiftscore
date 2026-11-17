@@ -1,13 +1,13 @@
 name: Update site
 
-# Ingest finished games, rebuild the site and deploy it to Cloudflare Pages. Runs every two hours by day and every half hour from
+# Ingest finished games, rebuild the site and deploy it to Cloudflare Pages. Runs every two hours by day and every ten minutes from
 # 22:00 to 07:59 UTC (5 pm to 3 am Eastern, when games finish), so a finished game's cards are on the site, and in subscribers' inboxes,
 # soon after it is processed. A scheduled run deploys only when it ingested a new game, plus the first run of each even UTC hour (the
 # schedule and scores on the page age, so those refresh every two hours); a manual run always deploys. Setup steps are in DEPLOY.md.
 on:
   schedule:
-    - cron: "17 8-20/2 * * *"
-    - cron: "17,47 22-23,0-7 * * *"
+    - cron: "7 8-20/2 * * *"
+    - cron: "7,17,27,37,47,57 22-23,0-7 * * *"   # every 10 minutes at game time: GitHub drops or delays some runs, so ask often (odd minutes avoid the busy :00 and :30)
   workflow_dispatch:
     inputs:
       full_rebuild:
