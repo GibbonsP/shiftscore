@@ -14,6 +14,7 @@ Publish with the Artifact tool using `files` = the manifest entries (one season
 per publish keeps each upload under the 64MB / 255-file limits).
 """
 import argparse
+import glob
 import hashlib
 import json
 import os
@@ -32,6 +33,20 @@ parser.add_argument("--seasons", nargs="+", help="rebuild only these seasons and
 args = parser.parse_args()
 PAGE_DATA = "artifact_data/page_data.json"
 
+
+def goalie_history():
+    """Every goalie's starts and goals saved above expected over all built seasons: {player_id: [sum of GSAx, starts]}.
+    The game predictions rate the likely starter from this (a goalie's earlier teams count too)."""
+    hist = {}
+    for path in sorted(glob.glob("artifact_data/*/teams/*.json")):
+        with open(path) as fh:
+            for r in json.load(fh).get("schedule", []):
+                gk = r.get("gk")
+                if gk:
+                    e = hist.setdefault(str(gk[0]), [0.0, 0])
+                    e[0] = round(e[0] + gk[4], 3); e[1] += 1
+    return hist
+
 def assemble(data):
     shell = open("artifact_shift_score.html").read()
     script = open("artifact_game_view.js").read() + "\n" + open("artifact_script_body.js").read()
@@ -46,7 +61,8 @@ def assemble(data):
 
 
 if args.page_only:
-    page = assemble(json.load(open(PAGE_DATA)))
+    _data = json.load(open(PAGE_DATA)); _data["goalie_hist"] = goalie_history()
+    page = assemble(_data)
     print(f"re-assembled page ({len(page) / 1e3:.0f} KB) from {PAGE_DATA}")
     raise SystemExit(0)
 
@@ -110,7 +126,7 @@ for season in all_seasons:
 
 # default season: the latest one with enough games that leaderboards mean something
 default = next((s["id"] for s in reversed(season_meta) if s["max_team_gp"] >= 10), season_meta[-1]["id"])
-data = {"seasons": season_meta, "default": default, "by_season": by_season}
+data = {"seasons": season_meta, "default": default, "by_season": by_season, "goalie_hist": goalie_history()}
 # the league schedule (past week through the next four weeks) for the Home page's date browser; keep the last one if the API is down
 try:
     import datetime
