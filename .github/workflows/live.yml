@@ -17,6 +17,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write    # lets the loop ask Update site to run when a game ends
 
 jobs:
   live:
@@ -28,6 +29,7 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_LIVE_BUCKET: ${{ vars.R2_LIVE_BUCKET }}
       R2_STATE_BUCKET: ${{ vars.R2_STATE_BUCKET }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

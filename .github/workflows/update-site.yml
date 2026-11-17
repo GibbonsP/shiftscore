@@ -14,6 +14,10 @@ on:
         description: "Rebuild every season's data files from the stored database (do this after a change to what the data files contain)"
         type: boolean
         default: false
+      only_if_new:
+        description: "Deploy only if a new game came in (what the live loop asks for when a game ends)"
+        type: boolean
+        default: false
 
 concurrency:
   group: site-update
@@ -60,7 +64,7 @@ jobs:
         run: python build_site.py
 
       - name: Deploy to Cloudflare Pages
-        if: github.event_name != 'schedule' || steps.update.outputs.updated == 'true' || steps.update.outputs.slot == 'true'
+        if: (github.event_name != 'schedule' && !inputs.only_if_new) || steps.update.outputs.updated == 'true' || steps.update.outputs.slot == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
