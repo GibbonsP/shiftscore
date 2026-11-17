@@ -1218,6 +1218,151 @@ const gameViewLinks = {
   unitFaces,
   unitPageLink: (key, team, text) => `<a class="row-link" title="Open this unit's page" data-open-unit="${key}" data-unit-team="${team}">${text}</a>`,
 };
+
+// --- Game previews: an upcoming game's page, shown until the game starts (then the live page and later the box score take over).
+// Built in the browser from the two teams' season files and each team's last game, so nothing extra is exported. A preview opens only
+// once every earlier game of both teams is processed, so the form, ratings and rest it shows are up to date.
+const isUpcomingState = (st) => !st || st === "FUT" || st === "PRE";
+const upcomingGame = (gid) => SCHEDULE().find(g => String(g[0]) === String(gid) && isUpcomingState(g[5]));
+const dayDiff = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
+const prettyDay = (d) => new Date(d + "T12:00:00Z").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+const lastName = (n) => String(n).split(" ").slice(-1)[0];
+// where a team's number ranks in the league (1 = best); higher or lower is better
+function leagueRank(abbrev, field, higherBetter) {
+  const rows = (S().teams_index || []).filter(t => t[field] !== null && t[field] !== undefined);
+  const me = rows.find(t => t.abbrev === abbrev); if (!me) return null;
+  return 1 + rows.filter(t => higherBetter ? t[field] > me[field] : t[field] < me[field]).length;
+}
+const rankTag = (r) => (r ? ` <small class="detail-sub">${ordinal(r)}</small>` : "");
+
+function previewHeaderHtml(sch, ta, th) {
+  const [, date, away, home, start] = sch;
+  const when = start ? new Date(start).toLocaleString([], { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }) : prettyDay(date);
+  const team = (abbr, td) => { const ti = (S().teams_index || []).find(t => t.abbrev === abbr) || {};
+    return `<div class="pv-team"><a class="row-link" data-open-team="${abbr}">${logoSpan(abbr)}<span class="pv-name">${teamName(abbr)}</span></a>
+      <div class="detail-sub">${ti.w ?? td.wins}-${ti.l ?? td.losses}${ti.otl !== undefined ? "-" + ti.otl : ""} &middot; ${ti.pts ?? ""} pts &middot; last 10: ${ti.l10 || ""}</div></div>`; };
+  return `<div class="pv-head"><span class="live-badge">PREVIEW</span> <span class="detail-sub">${escapeHtml(when)}</span>
+    <div class="pv-matchup">${team(away, ta)}<span class="pv-at">at</span>${team(home, th)}</div></div>`;
+}
+
+// rest: days since each team's last game, and whether this is the second night of a back-to-back
+function previewRestHtml(sch, ta, th) {
+  const date = sch[1];
+  const row = (abbr, td) => { const last = td.schedule[td.schedule.length - 1]; if (!last) return "";
+    const rest = dayDiff(last.date, date) - 1;
+    const txt = rest <= 0 ? '<b class="neg">Back-to-back</b> (played ' + (rest < 0 ? "today" : "yesterday") + ")" : rest === 1 ? "1 day of rest" : rest + " days of rest";
+    return `<tr><td>${teamLink(abbr)}</td><td>${txt}</td><td>${last.loc === "@" ? "@" : "vs"} ${last.opponent}, ${last.score} ${last.result}${last.outcome && last.outcome !== "REG" ? " (" + last.outcome + ")" : ""}</td></tr>`; };
+  return `<table><thead><tr><th>Team</th><th>Rest</th><th>Last game</th></tr></thead><tbody>${row(sch[2], ta)}${row(sch[3], th)}</tbody></table>`;
+}
+
+function previewComparisonHtml(away, home) {
+  const ti = (a) => (S().teams_index || []).find(t => t.abbrev === a) || {};
+  const A = ti(away), H = ti(home), gp = (t) => Math.max(1, t.gp || 1);
+  const num = (v, d) => (v === null || v === undefined ? "&ndash;" : Number(v).toFixed(d));
+  const rows = [
+    ["Record", `${A.w}-${A.l}-${A.otl}`, `${H.w}-${H.l}-${H.otl}`],
+    ["xGF% (5v5)", num(A.xgf_pct5, 1) + rankTag(leagueRank(away, "xgf_pct5", true)), num(H.xgf_pct5, 1) + rankTag(leagueRank(home, "xgf_pct5", true))],
+    ["Shot attempts % (5v5)", num(A.cf_pct5, 1), num(H.cf_pct5, 1)],
+    ["Goals for / game", num(A.gf / gp(A), 2), num(H.gf / gp(H), 2)],
+    ["Goals against / game", num(A.ga / gp(A), 2), num(H.ga / gp(H), 2)],
+    ["Goalie GSAx (season)", signed2(A.gsax || 0), signed2(H.gsax || 0)],
+  ];
+  return `<table><thead><tr><th></th><th class="num">${away}</th><th class="num">${home}</th></tr></thead><tbody>${
+    rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function previewSpecialHtml(away, home) {
+  const ti = (a) => (S().teams_index || []).find(t => t.abbrev === a) || {};
+  const f = (v, d) => (v === null || v === undefined ? "&ndash;" : Number(v).toFixed(d));
+  const line = (ppT, pkT) => { const P = ti(ppT), K = ti(pkT);
+    return `<tr><td>${teamLink(ppT)} power play</td><td class="num">${f(P.pp_xgf60, 1)}${rankTag(leagueRank(ppT, "pp_xgf60", true))}</td><td class="num">${f(P.pp_pct, 1)}%</td>
+      <td>${teamLink(pkT)} penalty kill</td><td class="num">${f(K.pk_xga60, 1)}${rankTag(leagueRank(pkT, "pk_xga60", false))}</td><td class="num">${f(K.pk_pct, 1)}%</td></tr>`; };
+  return `<div class="table-scroll"><table><thead><tr><th>Power play</th><th class="num">xGF/60</th><th class="num">PP%</th><th>against</th><th class="num">xGA/60</th><th class="num">PK%</th></tr></thead>
+    <tbody>${line(away, home)}${line(home, away)}</tbody></table></div>`;
+}
+
+function previewFormHtml(abbr, td) {
+  const rows = td.schedule.slice(-5).reverse().map(s => {
+    const x = s.xgf !== null && s.xgf !== undefined && s.xga !== null && s.xga !== undefined && s.xgf + s.xga > 0 ? (100 * s.xgf / (s.xgf + s.xga)).toFixed(0) + "%" : "";
+    return `<tr><td>${s.date.slice(5)}</td><td>${s.loc} ${s.opponent}</td><td class="${s.result === "W" ? "pos" : "neg"}">${s.result} ${s.score}${s.outcome && s.outcome !== "REG" ? " (" + s.outcome + ")" : ""}</td><td class="num">${x}</td></tr>`; }).join("");
+  return `<div><div class="detail-h3">${teamLink(abbr)} last 5 games</div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Opp</th><th>Result</th><th class="num">xGF%</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+// players to watch: the best and the worst average Adjusted Game Score over the team's last five games (at least three of them played)
+function previewWatchHtml(abbr, td) {
+  const last5 = new Set(td.schedule.slice(-5).map(s => s.gid));
+  const list = Object.entries(td.players || {}).map(([pid, p]) => {
+    const games = (p.game_log || []).filter(x => last5.has(x.gid) && x.adjusted !== null && x.adjusted !== undefined);
+    if (games.length < 3) return null;
+    const avg = games.reduce((a, x) => a + x.adjusted, 0) / games.length;
+    return { pid, name: p.name, avg, n: games.length, g: games.reduce((a, x) => a + (x.goals || 0), 0), a: games.reduce((a, x) => a + (x.assists || 0), 0), season: (p.summary || {}).avg_adjusted };
+  }).filter(Boolean).sort((a, b) => b.avg - a.avg);
+  const pick = (rows, label) => rows.map(r => `<tr><td>${label}</td><td>${playerLink(r.pid, abbr, r.name)}</td><td class="num">${gsCell(r.avg, "avg", true)}</td><td class="num">${r.g}G ${r.a}A in ${r.n}</td><td class="num">${r.season === undefined || r.season === null ? "" : signed2(r.season)}</td></tr>`).join("");
+  const hot = list.slice(0, 3), cold = list.slice(-2).filter(r => !hot.includes(r)).reverse();
+  return `<div><div class="detail-h3">${teamLink(abbr)}</div><div class="table-scroll"><table><thead><tr><th></th><th>Player</th><th class="num">Last 5 avg</th><th class="num">Production</th><th class="num">Season avg</th></tr></thead>
+    <tbody>${pick(hot, '<span class="pos">Hot</span>')}${pick(cold, '<span class="neg">Cold</span>')}</tbody></table></div></div>`;
+}
+
+// goalies: who has been starting, and how they have played
+function previewGoaliesHtml(abbr, td) {
+  const recent = td.schedule.slice(-10), lastStarter = (td.schedule[td.schedule.length - 1] || {}).gk;
+  const starts = {}; recent.forEach(s => { if (s.gk) starts[s.gk[0]] = (starts[s.gk[0]] || 0) + 1; });
+  const rows = (td.goalies || []).slice().sort((a, b) => b.gp - a.gp).map(g => `<tr><td>${playerLink(g.player_id, abbr, g.name)}${lastStarter && lastStarter[0] === g.player_id ? ' <small class="detail-sub">started last game</small>' : ""}</td>
+    <td class="num">${g.gp}</td><td class="num">${starts[g.player_id] || 0} of ${recent.length}</td><td class="num">${scoreCell(g.gsax)}</td><td class="num">${g.sv_pct === null || g.sv_pct === undefined ? "" : g.sv_pct.toFixed(3).replace(/^0/, "")}</td></tr>`).join("");
+  return `<div><div class="detail-h3">${teamLink(abbr)}</div><div class="table-scroll"><table><thead><tr><th>Goalie</th><th class="num">GP</th><th class="num">Last 10 starts</th><th class="num">GSAx</th><th class="num">Sv%</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+// the lines and pairs from a team's last game, graded the way the lines & pairs card grades them
+async function previewLineupHtml(abbr, td) {
+  const last = td.schedule[td.schedule.length - 1];
+  if (!last) return "";
+  let g; try { g = await fetchGame(last.home, last.gid); } catch (e) { g = null; }
+  if (!g) return "";
+  const side = g.home === abbr ? "home" : "away", sk = g.sk[side] || [];
+  const nameOf = (id) => (sk.find(x => x[0] === id) || [id, "?"])[1];
+  const pick = (type, n, tag) => g.units.filter(u => u[0] === abbr && u[1] === type).sort((a, b) => b[2] - a[2]).slice(0, n).map((u, i) => ({ slot: tag + (i + 1), u, tier: unitTier(u[12], tag + (i + 1)) }));
+  const row = (r) => `<tr><td><b>${r.slot}</b></td><td>${r.u[3].map(id => playerTextLink(id, abbr, lastName(nameOf(id)))).join(", ")}</td><td class="num">${toiStr(r.u[2])}</td>
+    <td class="num"><span class="gs gs-t${r.tier}">${r.u[12] > 0 ? "+" : ""}${r.u[12].toFixed(2)} ${GS_TIER_NAME[r.tier]}</span></td></tr>`;
+  return `<div><div class="detail-h3">${teamLink(abbr)} <span class="detail-sub">from ${last.loc === "@" ? "@" : "vs"} ${last.opponent}, ${prettyDay(last.date)}</span></div>
+    <div class="table-scroll"><table><thead><tr><th></th><th>Players</th><th class="num">TOI</th><th class="num">Unit score</th></tr></thead><tbody>${pick("line", 4, "L").map(row).join("")}${pick("pair", 3, "P").map(row).join("")}</tbody></table></div></div>`;
+}
+
+function previewMeetingsHtml(sch, th) {
+  const away = sch[2], meetings = (th.schedule || []).filter(s => s.opponent === away);
+  const body = meetings.length ? `<table><thead><tr><th>Date</th><th>Where</th><th>Result for ${sch[3]}</th></tr></thead><tbody>${meetings.map(s =>
+    `<tr><td>${prettyDay(s.date)}</td><td>${s.loc === "@" ? "at " + away : "at " + sch[3]}</td><td class="${s.result === "W" ? "pos" : "neg"}">${s.result} ${s.score}${s.outcome && s.outcome !== "REG" ? " (" + s.outcome + ")" : ""}</td></tr>`).join("")}</tbody></table>`
+    : '<div class="empty">These teams have not played each other yet this season.</div>';
+  return `<div class="detail-h3">Head to head <span class="detail-sub">this season</span></div>${body}`;
+}
+
+async function previewHtml(sch) {
+  const [gid, date, away, home] = sch;
+  const [ta, th] = await Promise.all([fetchTeam(away), fetchTeam(home)]);
+  const header = previewHeaderHtml(sch, ta, th);
+  // the preview waits for every earlier game of both teams to be processed
+  const waiting = [];
+  for (const [abbr, td] of [[away, ta], [home, th]]) {
+    const done = new Set(td.schedule.map(s => s.gid));
+    SCHEDULE().filter(g => g[1] < date && (g[2] === abbr || g[3] === abbr) && g[5] !== "PPD" && !done.has(g[0])).forEach(g => waiting.push([abbr, g]));
+  }
+  if (waiting.length) {
+    return header + `<div class="empty">The preview opens once ${[...new Set(waiting.map(w => w[0]))].join(" and ")}'s earlier ${waiting.length > 1 ? "games are" : "game is"} processed (${waiting.map(w => `${w[1][2]} at ${w[1][3]}, ${prettyDay(w[1][1])}`).join("; ")}), usually overnight.</div>`;
+  }
+  const started = LIVE.index && (LIVE.index.games || []).find(g => Number(g.id) === Number(gid) && !isUpcomingState(g.state));
+  const [lineA, lineH] = await Promise.all([previewLineupHtml(away, ta), previewLineupHtml(home, th)]);
+  return header
+    + (started ? `<div class="live-warn">This game has started. <a class="row-link" data-open-live="${gid}">Watch it live &rsaquo;</a></div>` : "")
+    + `<div class="detail-h3">Rest</div>${previewRestHtml(sch, ta, th)}`
+    + `<div class="detail-h3">Season so far</div>${previewComparisonHtml(away, home)}`
+    + `<div class="detail-h3">Recent form</div><div class="two-up">${previewFormHtml(away, ta)}${previewFormHtml(home, th)}</div>`
+    + `<div class="detail-h3">Special teams matchup <span class="detail-sub">expected goals per 60 minutes; rank among all teams</span></div>${previewSpecialHtml(away, home)}`
+    + `<div class="detail-h3">Players to watch <span class="detail-sub">Adjusted Game Score over each team's last five games</span></div><div class="two-up">${previewWatchHtml(away, ta)}${previewWatchHtml(home, th)}</div>`
+    + `<div class="detail-h3">Goalies</div><div class="two-up">${previewGoaliesHtml(away, ta)}${previewGoaliesHtml(home, th)}</div><div class="panel-caption">Starters are not announced until game day, so this shows who has been playing.</div>`
+    + `<div class="detail-h3">Lines and pairs <span class="detail-sub">each team's last game; lines change, so check the lineup news</span></div><div class="two-up">${lineA}${lineH}</div>`
+    + previewMeetingsHtml(sch, th)
+    + `<div class="panel-caption">The preview is replaced by the live page when the game starts, then by the full box score and cards once it is processed.</div>`;
+}
+
 function gamesListHtml(filterText) {
   const q = (filterText || "").trim().toLowerCase();
   const all = S().games_index || [];
@@ -1275,11 +1420,12 @@ function schedTileHtml(g) {
   const st = g[5], live = st === "LIVE" || st === "CRIT", done = st === "OFF" || st === "FINAL", started = live || done;
   const badge = live ? '<span class="live-badge on">IN PROGRESS</span>' : done ? `<span class="live-badge">${finalTag(g[8])}</span>`
     : st === "PPD" ? '<span class="live-badge">POSTPONED</span>' : `<span class="live-badge">${schedTime(g)}</span>`;
-  return `<div class="live-card">
+  const prev = isUpcomingState(st) ? ` data-open-game="${g[0]}" data-game-home="${g[3]}" data-game-season="${homeSeasonId()}" role="button" tabindex="0"` : "";
+  return `<div class="live-card${prev ? " clickable" : ""}"${prev}>
       <div class="live-status">${badge}</div>
       <div class="live-teams"><span>${logoSpan(g[2])}${g[2]}</span><b>${started && g[6] !== null ? g[6] : ""}</b></div>
       <div class="live-teams"><span>${logoSpan(g[3])}${g[3]}</span><b>${started && g[7] !== null ? g[7] : ""}</b></div>
-      ${done ? '<div class="live-sub">Cards and the box score appear once the game is processed, usually overnight.</div>' : ""}</div>`;
+      ${done ? '<div class="live-sub">Cards and the box score appear once the game is processed, usually overnight.</div>' : prev ? '<div class="live-sub">Preview &rsaquo;</div>' : ""}</div>`;
 }
 // live feed games and schedule-only games for the shown date (everything that is not a processed game)
 function liveSectionHtml() {
@@ -1659,7 +1805,18 @@ async function renderSpecialPanel(tabKey) {
     } else {
       const game = await fetchGame(state.home, state.gameId);
       if (seasonAtStart !== SEASON) return;
-      if (!game) { host.innerHTML = gameViewLinks.backHtml + '<div class="empty">Game not found.</div>'; return; }
+      if (!game) {
+        const up = upcomingGame(state.gameId);
+        if (up) {
+          const html = await previewHtml(up);
+          if (seasonAtStart !== SEASON) return;
+          host.innerHTML = gameViewLinks.backHtml + html;
+          syncUrl(true);
+          window.scrollTo({ top: 0 });
+          return;
+        }
+        host.innerHTML = gameViewLinks.backHtml + '<div class="empty">Game not found.</div>'; return;
+      }
       host.innerHTML = "";
       if (pendingGameTab !== null) { host._gvState = host._gvState || { period: "all", sit: "all" }; host._gvState.tab = pendingGameTab; pendingGameTab = null; }
       GameView.mount(host, game, gameViewLinks);
@@ -1700,7 +1857,7 @@ function liveCardHtml(g) {
   const started = live || final;
   const shots = g.sog ? `<div class="live-sub">Shots ${g.sog[0]}&ndash;${g.sog[1]} &middot; xG ${g.xg[0].toFixed(1)}&ndash;${g.xg[1].toFixed(1)}</div>` : "";
   const goals = (g.goals || []).slice(-3).map(x => `<div class="live-goal">${escapeHtml(x[0])} ${escapeHtml(x[1])} &middot; ${escapeHtml(x[2])} &mdash; ${escapeHtml(x[3])}</div>`).join("");
-  const open = started && g.sog ? ` data-open-live="${g.id}"` : "";
+  const open = started && g.sog ? ` data-open-live="${g.id}"` : !started && g.home ? ` data-open-game="${g.id}" data-game-home="${g.home}" data-game-season="${homeSeasonId()}"` : "";
   return `<div class="live-card${open ? " clickable" : ""}"${open}>
       <div class="live-status">${status}</div>
       <div class="live-teams"><span>${logoSpan(g.away)}${g.away}</span><b>${started ? g.away_score : ""}</b></div>
