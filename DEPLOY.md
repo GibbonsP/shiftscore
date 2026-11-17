@@ -141,3 +141,20 @@ deploys, and saves the new state. No upload from the Mac is needed for this.
 * The site's per-game files are fetched by the browser on demand; the largest is about 2 MB (the limit is 25 MB).
 * Changing the model or the weights means editing `private/formulas.json`, rebuilding every season locally, then pushing the new
   state with `python3 ci/state.py push` and uploading the new `private/formulas.json` to `state/formulas.json` so both cloud jobs use it.
+
+
+## Reliable scheduling (Cloudflare cron)
+
+GitHub's own scheduler skips and delays runs (a finished game can wait hours for the next Update site run). `worker/scheduler.js` is a
+small Cloudflare Worker whose cron trigger fires every 10 minutes and starts **Update site** (every 10 minutes from 22:00 to 07:59 UTC, every
+2 hours otherwise; it deploys only when a game came in) and **Live scores** (noon to 4 am Eastern), skipping a workflow that is already running
+or waiting. The GitHub schedules stay as a backup.
+
+1. GitHub: Settings (your account) > Developer settings > Personal access tokens > Fine-grained tokens > Generate. Repository access: only
+   this repository. Permissions: **Actions: Read and write** (nothing else). Expiration: one year (put the date in your calendar).
+2. Cloudflare dashboard: Workers & Pages > Create > Create Worker, name it `shiftscore-scheduler`, Deploy, then Edit code, replace everything
+   with the contents of `worker/scheduler.js`, Deploy.
+3. The worker's Settings > Variables and Secrets > Add: type **Secret**, name `GITHUB_TOKEN`, value the token from step 1. Deploy.
+4. Settings > Trigger Events > Add > Cron Triggers: `*/10 * * * *`.
+5. Check: open the worker's address (it says whether GitHub answers 200), then Observability > Logs shows one line per run, for example
+   `update-site.yml: started | live.yml: already running or waiting`.
