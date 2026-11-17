@@ -6,6 +6,7 @@ name: Live scores
 on:
   schedule:
     - cron: "50 21 * * *"        # 5:50 pm Eastern (4:50 pm in winter): covers the evening start
+    - cron: "30 0 * * *"         # 7:30 pm Eastern: a backstop in case the first start stopped early or was skipped
     - cron: "5 3 * * *"          # 11:05 pm Eastern: the late games
     - cron: "40 16 * * 0,6"      # weekend afternoons
   workflow_dispatch:
