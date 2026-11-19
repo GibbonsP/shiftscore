@@ -1096,10 +1096,28 @@ const GameView = (() => {
           const [d, txt] = muMetric === "xg" ? [xgf - xga, signed2(xgf - xga)] : muMetric === "cf" ? [cf - ca, `${cf}&ndash;${ca}`] : [gf - ga, `${gf}&ndash;${ga}`];
           return `<span class="mu-toi">${toiStr(toi)}</span><br><span class="${d > 0 ? "pos" : d < 0 ? "neg" : ""}" title="${toiStr(toi)} together &middot; shot attempts ${cf}&ndash;${ca} &middot; goals ${gf}&ndash;${ga} &middot; xG ${xgf.toFixed(2)}&ndash;${xga.toFixed(2)}">${txt}</span>`;
         };
+        // shade each cell by how lopsided that stretch was in the chosen measure (green: the row's unit ahead, red: behind); short stretches fade out
+        const MU_SCALE = { xg: 0.5, cf: 6, g: 2 };
+        const shade = (r) => {
+          if (!r) return "";
+          const [, , , toi, cf, ca, gf, ga, xgf, xga] = r, d = muMetric === "xg" ? xgf - xga : muMetric === "cf" ? cf - ca : gf - ga;
+          const a = Math.min(1, Math.abs(d) / MU_SCALE[muMetric]) * Math.min(1, toi / 180) * 0.45;
+          return a < 0.03 ? "" : ` style="background:${d > 0 ? `rgba(79,191,133,${a.toFixed(2)})` : `rgba(226,118,108,${a.toFixed(2)})`}"`;
+        };
         const head = `<tr><th></th>${colsList.map(t => `<th class="num"><b>${t}</b><br><span class="detail-sub mu-names">${escapeHtml(unitNames(opp[t]))}</span></th>`).join("")}</tr>`;
-        const body = rowsList.map(t => `<tr><td><b>${t}</b> <span class="detail-sub">${escapeHtml(unitNames(own[t]))}</span></td>${colsList.map(c => `<td class="num mu-cell">${fmt(cell[t + "|" + c])}</td>`).join("")}</tr>`).join("");
+        const body = rowsList.map(t => `<tr><td><b>${t}</b> <span class="detail-sub">${escapeHtml(unitNames(own[t]))}</span></td>${colsList.map(c => { const r = cell[t + "|" + c]; return `<td class="num mu-cell"${shade(r)}>${fmt(r)}</td>`; }).join("")}</tr>`).join("");
+        // the same pairings as a list with every number, longest time together first
+        const pct = (a, b) => (a + b > 0 ? Math.round(100 * a / (a + b)) + "%" : "&ndash;");
+        const listRows = (g.mu || []).filter(r => r[0] === side && own[r[1]] && opp[r[2]]).sort((a, b) => b[3] - a[3]).map(r => {
+          const [, a, b, toi, cf, ca, gf, ga, xgf, xga] = r;
+          return [`<b>${a}</b> <span class="detail-sub">${escapeHtml(unitNames(own[a]))}</span>`, `<b>${b}</b> <span class="detail-sub">${escapeHtml(unitNames(opp[b]))}</span>`, toiStr(toi), cf, ca, pct(cf, ca),
+            gf, ga, xgf.toFixed(2), xga.toFixed(2), scoreCell(Math.round((xgf - xga) * 100) / 100), pct(xgf, xga)];
+        });
+        const listHead = [{ label: "Unit" }, { label: "Against" }, ...["TOI", "CF", "CA", "CF%", "GF", "GA", "xGF", "xGA", "xG +/-", "xGF%"].map(label => ({ label, num: true }))];
         return `<div class="gv-group">${links.team(g[sd])} against ${escapeHtml(g[sd === "away" ? "home" : "away"])}'s lines and pairs</div>
-          <div class="table-scroll"><table class="mu-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+          <div class="table-scroll"><table class="mu-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+          <div class="board-sub">Every pairing</div><div class="unit-scroll">${statTable(listHead, listRows)}</div>
+          ${listRows.length > 8 ? `<div class="scroll-hint">${listRows.length} pairings &middot; scroll the table to see them all</div>` : ""}`;
       };
       const matchupSectionsFor = (teams) => {
         if (unitPeriods || !(g.mu && g.mu.length)) return "";
@@ -1107,7 +1125,7 @@ const GameView = (() => {
         if (!tables) return "";
         const chips = `<div class="chips gv-mupick" role="group" aria-label="Matchup measure">${MU_METRICS.map(([k, label]) => `<button type="button" class="chip" aria-pressed="${muMetric === k}" data-gv-mu="${k}">${label}</button>`).join("")}</div>`;
         return `<div class="detail-h3">Matchups</div>${chips}${tables}
-          <div class="panel-caption">Each row is one of the team's lines or pairs, each column one of the other team's, ranked by ice time that game. Every cell is the time they spent on the ice against each other at 5-on-5, with the shot-quality balance for that stretch under it: expected goals for minus against, shot attempts for&ndash;against, or goals. Green means the row's unit came out ahead. Small stretches are small samples, so read the big blocks of time.</div>`;
+          <div class="panel-caption">Each row is one of the team's lines or pairs, each column one of the other team's, ranked by ice time that game. Every cell is the time they spent on the ice against each other at 5-on-5, with the shot-quality balance for that stretch under it: expected goals for minus against, shot attempts for&ndash;against, or goals. Green means the row's unit came out ahead, and the shading is darker the bigger the edge and the longer they were together. Under each grid, every pairing is listed with its full numbers: shot attempts (CF, CA and CF%), goals, expected goals (xGF, xGA, the difference and xGF%). Small stretches are small samples, so read the big blocks of time.</div>`;
       };
       const unitSectionsFor = (teams) => teams.map(team => {
         const parts = UNIT_SECTIONS.filter(([t]) => sit.unitTypes.includes(t)).map(([t, title]) => {
