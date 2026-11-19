@@ -77,11 +77,15 @@ def on_site(site: str, game: dict, cache: dict) -> bool:
 
 
 def card_keys_for(sub_teams: set[str], game: dict) -> list[str]:
-    """Card keys one subscriber gets for one game: the table, plus bars and lines for each team of the game they follow."""
+    """Card keys one subscriber gets for one game: the table, plus bars and lines for each team of the game they follow, then the lines,
+    pairs and goalies card of an opponent they don't follow (so they see both teams' units)."""
     keys = ["table"]
     for side in ("away", "home"):
         if game[side] in sub_teams:
             keys += [f"bars-{side}", f"lines-{side}"]
+    for side, opp in (("away", "home"), ("home", "away")):
+        if game[side] in sub_teams and game[opp] not in sub_teams:
+            keys.append(f"lines-{opp}")
     return keys
 
 
