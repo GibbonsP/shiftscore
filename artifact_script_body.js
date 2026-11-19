@@ -525,10 +525,12 @@ function unitDetailHtml(data, key) {
     { name: "Share", cells: [...band.map(b => shareCell(b[0], b[1])), shareCell(sum(0), sum(1))] },
   ], "Total");
   const log = statTable(
-    [{ label: "Date" }, { label: "Opp" }, { label: "Result" }, ...["TOI", "CF", "CA", "GF", "GA", "xGF", "xGA", "HD", "MD", "LD", "Unit Score"].map(label => ({ label, num: true }))],
+    [{ label: "Date" }, { label: "Opp" }, { label: "Result" }, ...["TOI", "CF", "CA", "GF", "GA", "xGF", "xGA", "HD", "MD", "LD", "Unit Score"].map(label => ({ label, num: true })), ...(u.type === "line" || u.type === "pair" ? [{ label: "Slot / grade" }] : [])],
     u.log.map(g => { const pair = (f, a) => (f > a ? `<span class="pos">${f}&ndash;${a}</span>` : f < a ? `<span class="neg">${f}&ndash;${a}</span>` : `${f}&ndash;${a}`);
       return [gameLink(g[14], g[15], g[0]), g[2] + " " + g[1], g[3], toiStr(g[4]), g[5], g[6], g[7], g[8], g[9].toFixed(2), g[10].toFixed(2),
-        pair(g[11], g[12]), pair(g[16] || 0, g[17] || 0), pair(g[18] || 0, g[19] || 0), scoreCell(g[13])]; })
+        pair(g[11], g[12]), pair(g[16] || 0, g[17] || 0), pair(g[18] || 0, g[19] || 0), scoreCell(g[13])]
+        // lines and pairs: where he ranked that night (by ice time among the team's lines or pairs) and the grade it earned
+        .concat(u.type === "line" || u.type === "pair" ? [g[20] ? `<span class="detail-sub">${u.type === "line" ? "L" : "P"}${g[20]}</span> ${unitGradeHtml(g[13], (u.type === "line" ? "L" : "P") + g[20])}` : "&ndash;"] : []); })
   );
   return `
     ${back}
@@ -1096,9 +1098,12 @@ function goalieSummaryHtml(p, row) {
     [[toiStr(toi), rate(sa), toi >= 3600 ? scoreCell(gsax * 3600 / toi) : "&ndash;", hs, hx, ms, mx, ls, lx]]);
   return results + '<div style="height:12px"></div>' + rates + `<div class="panel-caption">W-L counts games he started (a loss includes overtime and shootout losses). Expected Sv% is what an average goalie would save on the same shots: one minus expected goals against over shots. GSAx is expected goals against minus goals allowed. The danger columns split his save percentage by how likely each shot was to score, next to what an average goalie would save on those shots. Rates need an hour of ice time.</div>`;
 }
-function playerDetailHtml(playerId, teamData, sec) {
-  const p = teamData.players[playerId];
-  if (!p) return '<div class="empty">Player not found on this roster.</div>';
+function playerDetailHtml(playerId, teamData, sec, tm) {
+  const p0 = teamData.players[playerId];
+  if (!p0) return '<div class="empty">Player not found on this roster.</div>';
+  // a player traded this season has one page for all his teams: the combined totals, or (tm) only his games with one of them
+  const bt = p0.by_team, btTeams = bt ? Object.keys(bt) : [], view = bt && tm && bt[tm] ? tm : null;
+  const p = view ? Object.assign({}, p0, { summary: bt[view], splits: bt[view].splits, game_log: p0.game_log.filter(g => g.team === view) }) : p0;
   const s = p.summary;
   const goalieRowHere = (teamData.goalies || []).find(r => String(r.player_id) === String(playerId));
   const posHere = ((teamData.roster || []).find(r => String(r.player_id) === String(playerId)) || {}).position;   // raw Game Score is colored against his own position
@@ -1164,9 +1169,11 @@ function playerDetailHtml(playerId, teamData, sec) {
   })() : "";
   const log = statTable(
     [{ label: "Date" }, { label: "Team" }, { label: "Opp" }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
-     { label: "QoC", num: true }, { label: "QoT", num: true }, { label: "Adjusted", num: true }, { label: "ixG", num: true }],
+     { label: "QoC", num: true }, { label: "QoT", num: true }, { label: "Adjusted", num: true }, { label: "ixG", num: true }, { label: "Line / pair" }],
     p.game_log.map(g => [gameLink(g.gid, g.home, g.date), g.team, g.opp ? `<span class="detail-sub">${escapeHtml(g.loc || "")}</span> ${logoSpan(g.opp)}${escapeHtml(g.opp)}` : "&ndash;", g.goals, g.a1, g.a2, gsCell(g.raw, gsKind(posHere, false), false),
-      g.qoc, g.qot, gsCell(g.adjusted, "adj", true), g.ixg])
+      g.qoc, g.qot, gsCell(g.adjusted, "adj", true), g.ixg,
+      // the line or pair he spent the most time with that night, graded against the same slot in every game since 2024-25
+      g.u ? `<a class="row-link" data-open-unit="${g.u[2]}" data-unit-team="${g.team}">${g.u[0]}</a> ${unitGradeHtml(g.u[1], g.u[0])} <span class="detail-sub">${signed2(g.u[1])}</span>` : "&ndash;"])
   );
   const isGoalie = (teamData.goalies || []).some(g => String(g.player_id) === String(playerId));
   const glog = isGoalie && p.goalie_log && p.goalie_log.length ? p.goalie_log : null;
@@ -1181,9 +1188,18 @@ function playerDetailHtml(playerId, teamData, sec) {
   const secKey = SECS.some(x => x[0] === sec) ? sec : "overview";
   const nav = `<nav class="chips team-nav" role="tablist" aria-label="Player sections">${SECS.map(([k, label]) =>
     `<button type="button" class="chip" role="tab" aria-pressed="${k === secKey}" data-player-sec="${k}">${label}</button>`).join("")}</nav>`;
+  const byTeamHtml = bt ? statTable(
+    [{ label: "Team" }, ...["GP", "G", "A", "P", "Avg Raw", "Avg Adjusted", "TOI / GP", "xGF%"].map(label => ({ label, num: true }))],
+    btTeams.map(t => { const x = bt[t]; return [`<a class="row-link" data-player-tm="${t}">${logoSpan(t)}${t}</a>`, x.gp, x.goals, x.a1 + x.a2, x.points, gsCell(x.avg_raw, gsKind(posHere, true), false), gsCell(x.avg_adjusted, "avg", true),
+      x.gp ? toiStr(Math.round(x.toi / x.gp)) : "&ndash;", pctOf(x.xgf, x.xga)]; })
+  ) : "";
+  const tmChips = bt ? `<div class="chips board-chips" role="group" aria-label="Team">${[["all", "All teams"], ...btTeams.map(t => [t, t])].map(([k, label]) =>
+    `<button type="button" class="chip" aria-pressed="${(view || "all") === k}" data-player-tm="${k}">${label}</button>`).join("")}</div>` : "";
   const unitsHtml = unitSectionsHtml((teamData.units || []).filter(u => u.players.some(x => String(x.id) === String(playerId))), teamData.abbrev, !teamData.allUnits, !!teamData.allUnits);
   const body = {
-    overview: () => `<div class="detail-h3">Season Summary</div>${summary}
+    overview: () => `<div class="detail-h3">Season Summary${view ? ` <span class="detail-sub">${view} only</span>` : bt ? ' <span class="detail-sub">all teams</span>' : ""}</div>${summary}
+      ${bt && !view ? `<div class="detail-h3">By team</div>${byTeamHtml}<div class="panel-caption">He was traded this season. Every number on this page counts all his teams; pick one above to see only his games with that team.</div>` : ""}
+      <div class="detail-h3">Seasons</div><div id="player-seasons" data-pid="${playerId}" data-goalie="${isGoalie ? 1 : 0}"><div class="empty">Loading&hellip;</div></div>
       ${glog ? goalieStartsHtml(glog) : ""}
       ${trend ? `<div class="detail-h3">Trend</div>${trend}` : ""}
       ${advanced && !isGoalie ? `<div class="detail-h3">Advanced</div>${advanced}<div class="panel-caption">CF%, xGF% and HDCF% are the team's share of shot attempts, expected goals and high-danger shots on goal while he was on the ice (all situations). OZ start % is offensive-zone shift starts over offensive plus defensive.</div>` : ""}`,
@@ -1191,7 +1207,7 @@ function playerDetailHtml(playerId, teamData, sec) {
     splits: () => `${splits ? `<div class="detail-h3">By situation</div>${splits}` : ""}
       ${dangerTable ? `<div class="detail-h3">Shot danger</div>${dangerTable}<div class="panel-caption">Own shots are the shots on goal he took, by how likely each was to score (high 14%+, medium 7-14%, low under 7%). Under each count are his goals and his expected goals (xG) from those shots, the chance each had of scoring added up: green means he scored more than expected, red fewer. On ice for and against are the shots on goal his team took and allowed while he was out there, each with the goals and expected goals from them: for the team, green means more goals than the shots were worth; against it, green means fewer goals allowed than expected. Share is his team's part of the shots.</div>` : ""}`,
     danger: () => goalieDangerTable ? `<div class="detail-h3">Goalie results by shot danger</div>${goalieDangerTable}<div class="panel-caption">GSAx is expected goals against minus goals allowed in each band.</div>` : '<div class="empty">No shot-danger data yet.</div>',
-    units: () => unitsHtml || '<div class="empty">No lines or pairs with enough time together yet.</div>',
+    units: () => (bt ? `<div class="panel-caption">Showing his lines and pairs with ${teamData.abbrev}.${btTeams.length > 1 ? ` Pick another team above and open this tab again to see the others.` : ""}</div>` : "") + (unitsHtml || '<div class="empty">No lines or pairs with enough time together yet.</div>'),
   }[secKey]();
   // the section tabs sit right under the player's name and numbers (inside the card, above the long percentile list); on the other
   // sections the card shrinks to just its header so the tabs stay near the top
@@ -1203,8 +1219,55 @@ function playerDetailHtml(playerId, teamData, sec) {
   return `
     ${detailNav(`<button class="back-btn" data-back="${isGoalie ? "goalies" : "skaters"}">&larr; All ${isGoalie ? "Goalies" : "Skaters"}</button>`)}
     ${cardHtml}${navPlaced ? "" : nav}
+    ${tmChips}
     <div class="team-section">${body}</div>
   `;
+}
+
+
+// The "Seasons" table on a player's page: one row per season (and per team, when he was traded that year), newest first, so earlier seasons
+// are a click away instead of a trip to the season menu. Each season's numbers come from that season's team file; clicking a row opens his
+// page for that season.
+async function fillPlayerSeasons(seasonAtStart) {
+  const box = document.getElementById("player-seasons");
+  if (!box) return;
+  const pid = box.dataset.pid, isGoalie = box.dataset.goalie === "1";
+  const found = [];
+  for (const sx of [...DATA.seasons].reverse()) {
+    const by = DATA.by_season[sx.id] || {};
+    const ent = isGoalie ? (by.goalies || []).find(g => String(g.pid) === String(pid)) : (by.players_index || []).find(x => String(x.id) === String(pid));
+    if (ent) found.push({ sx, team: ent.team });
+  }
+  const loaded = await Promise.all(found.map(f => fetchJson(`data/${f.sx.id}/teams/${f.team}.json`).then(td => ({ ...f, td }), () => null)));
+  if (seasonAtStart !== SEASON || !document.body.contains(box) || box.dataset.pid !== pid) return;
+  const rows = [];
+  const open = (f, team, cur) => `data-open-player="${pid}" data-player-team="${team}" data-player-season="${f.sx.id}" role="button" tabindex="0"${cur ? ' aria-current="true"' : ""}`;
+  for (const f of loaded.filter(Boolean)) {
+    const cur = f.sx.id === SEASON, p = (f.td.players || {})[pid];
+    if (!p) continue;
+    if (isGoalie) {
+      const g = (f.td.goalies || []).find(x => String(x.player_id) === String(pid));
+      if (!g) continue;
+      rows.push(`<tr class="season-row${cur ? " cur" : ""}" ${open(f, f.team, cur)}><td>${f.sx.label}</td><td>${logoSpan(f.team)}${f.team}</td><td class="num">${g.gp}</td><td class="num">${g.shots_faced}</td><td class="num">${g.goals_allowed}</td>
+        <td class="num">${g.sv_pct === null || g.sv_pct === undefined ? "&ndash;" : g.sv_pct.toFixed(3).replace(/^0/, "")}</td><td class="num">${scoreCell(g.gsax)}</td></tr>`);
+      continue;
+    }
+    const pos = ((f.td.roster || []).find(r => String(r.player_id) === pid) || {}).position;
+    const line = (label, team, x, strong) => `<tr class="season-row${cur ? " cur" : ""}${strong ? " season-total" : ""}" ${open(f, team, cur)}><td>${label}</td><td>${team === "all" ? "All teams" : logoSpan(team) + team}</td>
+      <td class="num">${x.gp}</td><td class="num">${x.goals}</td><td class="num">${x.a1 + x.a2}</td><td class="num">${x.points}</td>
+      <td class="num">${gsCell(x.avg_raw, gsKind(pos, true), false)}</td><td class="num">${gsCell(x.avg_adjusted, "avg", true)}</td><td class="num">${x.toi && x.gp ? toiStr(Math.round(x.toi / x.gp)) : "&ndash;"}</td><td class="num">${pctOf(x.xgf, x.xga)}</td></tr>`;
+    if (p.by_team) {
+      Object.keys(p.by_team).forEach((t, i) => rows.push(line(i === 0 ? f.sx.label : "", t, p.by_team[t], false)));
+      rows.push(line("", "all", p.summary, true));
+    } else {
+      rows.push(line(f.sx.label, f.team, p.summary, false));
+    }
+  }
+  const head = isGoalie ? ["Season", "Team", "GP", "Shots", "GA", "Sv%", "GSAx"] : ["Season", "Team", "GP", "G", "A", "P", "Avg Raw", "Avg Adjusted", "TOI / GP", "xGF%"];
+  box.innerHTML = rows.length
+    ? `<div class="table-scroll"><table class="season-table"><thead><tr>${head.map((h, i) => `<th class="${i > 1 ? "num" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
+       <div class="panel-caption">Click a season to open his page for that year.</div>`
+    : '<div class="empty">No earlier seasons.</div>';
 }
 
 // --- Games (box score rendered by the shared GameView in artifact_game_view.js)
@@ -1849,7 +1912,7 @@ async function renderSpecialPanel(tabKey) {
     } else if (tabKey === "skaters" || tabKey === "goalies") {
       let td = await fetchTeam(state.teamAbbrev);
       if (state.allUnits) td = await withAllUnits(td);
-      html = playerDetailHtml(String(state.playerId), td, state.sec);
+      html = playerDetailHtml(String(state.playerId), td, state.sec, state.tm);
     } else {
       const game = await fetchGame(state.home, state.gameId);
       if (seasonAtStart !== SEASON) return;
@@ -1875,6 +1938,7 @@ async function renderSpecialPanel(tabKey) {
     if (seasonAtStart !== SEASON) return; // user switched seasons while loading
     host.innerHTML = html;
     window.scrollTo({ top: 0 });
+    if (tabKey === "skaters" || tabKey === "goalies") fillPlayerSeasons(seasonAtStart);
   } catch (e) {
     host.innerHTML = '<div class="empty">Couldn\'t load that data.</div>';
   }
@@ -2304,10 +2368,20 @@ document.addEventListener("click", (ev) => {
     Object.assign(specialState.teams, { mode: "unit", abbrev: openUnit.dataset.unitTeam, unitKey: openUnit.dataset.openUnit });
     selectTab("teams"); renderSpecialPanel("teams");
   } else if (openPlayer) {
+    // a season row on a player's own page opens that season's page for him (no need for the season menu)
+    const ps = openPlayer.dataset.playerSeason;
+    const switching = ps && ps !== SEASON && DATA.by_season[ps];
+    if (switching) {
+      SEASON = ps;
+      try { localStorage.setItem("shiftscore-season", SEASON); } catch (e) {}
+      document.getElementById("season-select").value = SEASON;
+      specialState = freshState();
+      buildPage();
+    }
     // a goalie's page lives under Goalies, a skater's under Skaters
     const goalie = (S().goalies || []).some(g => String(g.pid) === String(openPlayer.dataset.openPlayer));
     const tab = goalie ? "goalies" : "skaters";
-    if (String(specialState[tab].playerId) !== String(openPlayer.dataset.openPlayer)) specialState[tab].sec = "overview";
+    if (switching || String(specialState[tab].playerId) !== String(openPlayer.dataset.openPlayer)) { specialState[tab].sec = "overview"; specialState[tab].tm = "all"; }
     Object.assign(specialState[tab], { mode: "detail", playerId: openPlayer.dataset.openPlayer, teamAbbrev: openPlayer.dataset.playerTeam, allUnits: false });
     selectTab(tab); renderSpecialPanel(tab);
   } else if (openTeam) {
@@ -2673,6 +2747,15 @@ document.addEventListener("click", async (ev) => {
     cl.textContent = ok ? "Link copied" : "Couldn't copy";
     if (!ok) { try { window.prompt("Copy this link", location.href); } catch (e) {} }
     setTimeout(() => { cl.textContent = "Copy link"; }, 2000);
+    return;
+  }
+  const ptm = ev.target.closest("[data-player-tm]");
+  if (ptm) {
+    // a traded player: all his teams combined, or one team (the page loads that team's file so its lines and pairs are the ones shown)
+    const tab = activeTab === "goalies" ? "goalies" : "skaters", keep = window.scrollY, t = ptm.dataset.playerTm;
+    specialState[tab].tm = t;
+    if (t !== "all") specialState[tab].teamAbbrev = t;
+    renderSpecialPanel(tab).then(() => window.scrollTo(0, keep));
     return;
   }
   const ps = ev.target.closest("[data-player-sec]");

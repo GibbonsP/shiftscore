@@ -184,7 +184,9 @@ def leaderboards(conn, unit_keys: set, units: list | None = None) -> dict:
     }
 
 
-def _player_summary_and_log(conn, player_id, home_by_game):
+def _player_summary(conn, player_id, team_id=None):
+    """A skater's season totals: over every team he played for, or (team_id) only his games with one team."""
+    tf, args = ("", (player_id,)) if team_id is None else (" AND team_id = ?", (player_id, team_id))
     totals = conn.execute(
         """SELECT COUNT(*), SUM(goals), SUM(primary_assists + secondary_assists), SUM(shots),
                   AVG(raw_game_score), SUM(ixg), SUM(hits), SUM(takeaways),
@@ -195,14 +197,17 @@ def _player_summary_and_log(conn, player_id, home_by_game):
                   SUM(hdgf_all), SUM(hdga_all), SUM(mdgf_all), SUM(mdga_all), SUM(ldgf_all), SUM(ldga_all),
                   SUM(hdxgf_all), SUM(hdxga_all), SUM(mdxgf_all), SUM(mdxga_all), SUM(ldxgf_all), SUM(ldxga_all),
                   SUM(primary_assists)
-           FROM player_game_stats WHERE player_id = ?""",
-        (player_id,),
+           FROM player_game_stats WHERE player_id = ?""" + tf,
+        args,
     ).fetchone()
     (gp, goals, assists, shots, avg_raw, total_ixg, hits, tk, gv, pim, toi, oz, dz, nz, fly,
      cf, ca, xgf, xga, hdcf, hdca, fow, fol, pd, pt, blk, mdcf, mdca, ldcf, ldca,
      hdgf, hdga, mdgf, mdga, ldgf, ldga, hdxgf, hdxga, mdxgf, mdxga, ldxgf, ldxga, a1) = (v or 0 for v in totals)
     avg_adj = (
-        conn.execute("SELECT AVG(adjusted_impact) FROM player_game_impact WHERE player_id = ?", (player_id,)).fetchone()[0]
+        conn.execute(
+            """SELECT AVG(pgi.adjusted_impact) FROM player_game_impact pgi
+               JOIN player_game_stats pgs ON pgs.game_id = pgi.game_id AND pgs.player_id = pgi.player_id
+               WHERE pgi.player_id = ?""" + tf.replace("team_id", "pgs.team_id"), args).fetchone()[0]
         or 0
     )
     summary = {
@@ -217,6 +222,13 @@ def _player_summary_and_log(conn, player_id, home_by_game):
         "hdgf": int(hdgf), "hdga": int(hdga), "mdgf": int(mdgf), "mdga": int(mdga), "ldgf": int(ldgf), "ldga": int(ldga),
         "hdxgf": round(hdxgf, 2), "hdxga": round(hdxga, 2), "mdxgf": round(mdxgf, 2), "mdxga": round(mdxga, 2), "ldxgf": round(ldxgf, 2), "ldxga": round(ldxga, 2),
     }
+    return summary
+
+
+def _player_summary_and_log(conn, player_id, home_by_game, abbrev_by_id=None, unit_by_pg=None):
+    """(summary over all his teams, game log, by_team). by_team is {abbrev: summary} for a player who was traded in this season, else None.
+    Each log row carries `u` = [slot, unit score, unit key] for the line or pair he played the most with that game (slots L1-L4, P1-P3)."""
+    summary = _player_summary(conn, player_id)
     log = rows(
         conn,
         f"""SELECT gm.game_date AS date, t.abbrev AS team, pgs.goals, pgs.primary_assists + pgs.secondary_assists AS assists,
@@ -235,7 +247,16 @@ def _player_summary_and_log(conn, player_id, home_by_game):
     )
     for r in log:
         r["home"] = home_by_game[r["gid"]]
-    return summary, log
+    unit_by_pg = unit_by_pg or {}
+    for r in log:
+        u = unit_by_pg.get((r["gid"], player_id))
+        if u:
+            r["u"] = u
+    by_team = None
+    if abbrev_by_id and len({r["team"] for r in log}) > 1:
+        ids = [t for (t,) in conn.execute("SELECT DISTINCT team_id FROM player_game_stats WHERE player_id = ?", (player_id,))]
+        by_team = {abbrev_by_id[t]: _player_summary(conn, player_id, t) for t in ids if t in abbrev_by_id}
+    return summary, log, by_team
 
 
 def _compact_unit(u, home_by_game):
@@ -245,7 +266,7 @@ def _compact_unit(u, home_by_game):
         "log": [
             [g["date"], g["opp"], g["loc"], g["result"], g["toi_sec"], g["cf"], g["ca"], g["gf"], g["ga"],
              g["xgf"], g["xga"], g["hdcf"], g["hdca"], g["score"], g["game_id"], home_by_game[g["game_id"]],
-             g.get("mdcf", 0), g.get("mdca", 0), g.get("ldcf", 0), g.get("ldca", 0)]
+             g.get("mdcf", 0), g.get("mdca", 0), g.get("ldcf", 0), g.get("ldca", 0), g.get("slot", 0)]
             for g in u["log"]
         ],
     }
@@ -301,6 +322,26 @@ def team_shards(conn, units: list[dict]) -> tuple[dict, list, list, dict]:
             return None, None
         return round(sum(r[3] for r in opp), 2), round(sum(r[3] for r in own), 2)
 
+    abbrev_by_id = {tid: ab for tid, ab in teams}
+    # the line or pair each player spent the most time with in each game, with that unit's slot (L1-L4 forwards, P1-P3 defense, ranked by
+    # time together among the team's lines or pairs that game) and score: the player game log shows it with its grade
+    unit_by_pg: dict[tuple, list] = {}
+    _ranked: dict[tuple, list] = {}
+    for gid, tid, utype, pids, toi, score in conn.execute(
+        "SELECT game_id, team_id, unit_type, player_ids, toi_sec, unit_score FROM unit_game_stats WHERE unit_type IN ('line', 'pair')"
+    ):
+        _ranked.setdefault((gid, tid, utype), []).append((toi, pids, score))
+    for (gid, tid, utype), lst in _ranked.items():
+        lst.sort(key=lambda x: -x[0])
+        for i, (toi, pids, score) in enumerate(lst[: (4 if utype == "line" else 3)]):
+            tag = ("L" if utype == "line" else "P") + str(i + 1)
+            for pid in pids.split(","):
+                cur = unit_by_pg.get((gid, int(pid)))
+                if cur is None or toi > cur[3]:
+                    unit_by_pg[(gid, int(pid))] = [tag, round(score or 0, 2), unit_key(abbrev_by_id[tid], utype, pids), toi]
+    unit_by_pg = {k: v[:3] for k, v in unit_by_pg.items()}
+    del _ranked
+
     for team_id, abbrev in teams:
         roster = rows(
             conn,
@@ -347,8 +388,10 @@ def team_shards(conn, units: list[dict]) -> tuple[dict, list, list, dict]:
 
         players = {}
         for p in roster + goalie_rows:
-            summary, log = _player_summary_and_log(conn, p["player_id"], home_by_game)
+            summary, log, by_team = _player_summary_and_log(conn, p["player_id"], home_by_game, abbrev_by_id, unit_by_pg)
             players[str(p["player_id"])] = {"name": p["name"], "summary": summary, "game_log": log}
+            if by_team:
+                players[str(p["player_id"])]["by_team"] = by_team   # traded this season: his totals with each team, beside the combined summary
         # a goalie's game-by-game line: shots, goals, expected goals against, and what the team did, for the start grade and trend
         for gr in goalie_rows:
             gl = []
@@ -855,10 +898,29 @@ def build_season(conn, pipeline) -> dict:
         t["ppo"], t["pko"] = ppo, pko
         t["pp_pct"] = round(100 * t.get("pp_g", 0) / ppo, 1) if ppo else None
         t["pk_pct"] = round(100 * (1 - t.get("pk_ga_n", 0) / pko), 1) if pko else None
-    for (team, pid), splits in player_splits(games).items():
+    all_splits = player_splits(games)
+    for (team, pid), splits in all_splits.items():
         shard = team_data.get(team)
         if shard and str(pid) in shard["players"]:
             shard["players"][str(pid)]["splits"] = splits
+    # a player traded this season: every team's shard holds the same combined page, so its splits are the sum over his teams, and each
+    # team's own splits go with that team's totals (by_team)
+    for shard in team_data.values():
+        for pid, p in shard["players"].items():
+            bt = p.get("by_team")
+            if not bt:
+                continue
+            combined: dict = {}
+            for team, summ in bt.items():
+                sp = all_splits.get((team, int(pid)))
+                if not sp:
+                    continue
+                summ["splits"] = sp
+                for sit, vals in sp.items():
+                    cur = combined.setdefault(sit, [0.0] * len(vals))
+                    for i, x in enumerate(vals):
+                        cur[i] += x
+            p["splits"] = {k: [round(x, 2) for x in v] for k, v in combined.items()}
     for (team, pid), danger in goalie_danger(games).items():
         shard = team_data.get(team)
         if shard and str(pid) in shard["players"]:

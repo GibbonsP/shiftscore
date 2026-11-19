@@ -117,6 +117,19 @@ def build_units(conn, min_toi: dict | int | None = None) -> list[dict]:
            FROM unit_game_stats ORDER BY game_id"""
     ).fetchall()
 
+    # a line or pair's slot in each game: its rank by ice time among its team's lines (L1-L4) or pairs (P1-P3) that game, 0 beyond them.
+    # The site grades a game's Unit Score against the same slot in other games.
+    slot_of: dict[tuple, int] = {}
+    _by_game: dict[tuple, list] = {}
+    for r in rows:
+        if r[2] in ("line", "pair"):
+            _by_game.setdefault((r[0], r[1], r[2]), []).append((r[4], r[3]))
+    for (gid, tid, utype), lst in _by_game.items():
+        lst.sort(key=lambda x: -x[0])
+        for i, (_toi, pids) in enumerate(lst[: (4 if utype == "line" else 3)]):
+            slot_of[(gid, tid, utype, pids)] = i + 1
+    del _by_game
+
     by_unit: dict[tuple, list] = {}
     for r in rows:
         k = (r[1], r[2], r[3])
@@ -144,6 +157,7 @@ def build_units(conn, min_toi: dict | int | None = None) -> list[dict]:
                     "xgf": round(xgf or 0, 2), "xga": round(xga or 0, 2),
                     "hdcf": hdcf, "hdca": hdca, "score": round(score or 0, 2),
                     "mdcf": mdcf or 0, "mdca": mdca or 0, "ldcf": ldcf or 0, "ldca": ldca or 0,
+                    "slot": slot_of.get((game_id, team_id, unit_type, pids), 0),
                 }
             )
         log.sort(key=lambda g: g["date"])

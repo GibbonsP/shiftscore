@@ -40,6 +40,15 @@ const UNIT_CUTS = {
   P1: [-1.93, -0.93, -0.25, 0.39, 1.1, 2.15], P2: [-1.92, -0.98, -0.32, 0.26, 0.91, 1.94], P3: [-1.73, -0.9, -0.32, 0.14, 0.73, 1.62],
 };
 const unitTier = (v, slot) => { const cuts = UNIT_CUTS[slot]; let t = 0; while (t < cuts.length && v >= cuts[t]) t += 1; return t; };
+// the grade chip for a line or pair's Unit Score in one game, by the slot it held (L1-L4, P1-P3); "-" for any other unit
+const unitGradeHtml = (score, slot) => (slot && UNIT_CUTS[slot] ? `<span class="gs gs-t${unitTier(score, slot)}" title="Graded against every ${slot} since 2024-25">${GS_TIER_NAME[unitTier(score, slot)]}</span>` : "&ndash;");
+// the slot a unit held in a game: its rank by ice time among its team's lines or pairs that game (null beyond L4 / P3)
+function unitSlotInGame(g, u) {
+  if (u[1] !== "line" && u[1] !== "pair") return null;
+  const same = g.units.filter(x => x[0] === u[0] && x[1] === u[1]).sort((a, b) => b[2] - a[2]);
+  const i = same.findIndex(x => x === u || (u[13] && x[13] === u[13]));
+  return i >= 0 && i < (u[1] === "line" ? 4 : 3) ? (u[1] === "line" ? "L" : "P") + (i + 1) : null;
+}
 const GS_TIER_NAME = ["Awful", "Poor", "Below average", "Average", "Good", "Great", "Elite"];
 const GS_CARD_COLORS = ["#ff5d5d", "#f2805f", "#e8b86c", "#dbe6f0", "#b4e07a", "#55d49a", "#19e6c8"];   // the same tiers on the dark share cards
 function gsTier(v, kind) {
@@ -1036,8 +1045,10 @@ const GameView = (() => {
       const unitPeriods = per.key === "all" ? null : per.idx.map(i => i + 1);
       // one table per team and kind of unit, so each team's lines, pairs and special teams read on their own
       const unitCols = [{ label: "Unit" }, ...["TOI", "CF", "CA", "GF", "GA", "xGF", "xGA", "HDCF", "HDCA", "MDCF", "MDCA", "LDCF", "LDCA", "Unit Score"].map(label => ({ label, num: true }))];
-      const unitRow = (u, text) => [text, toiStr(u[2]), u[4], u[5], u[6], u[7], u[8].toFixed(2), u[9].toFixed(2),
-        u[10], u[11], u[14] || 0, u[15] || 0, u[16] || 0, u[17] || 0, scoreCell(u[12])];
+      // lines and pairs also get a grade (whole game only: the cut points are for a full game's Unit Score, not a period's)
+      const gradedCols = [...unitCols, { label: "Grade" }];
+      const unitRow = (u, text, graded) => [text, toiStr(u[2]), u[4], u[5], u[6], u[7], u[8].toFixed(2), u[9].toFixed(2),
+        u[10], u[11], u[14] || 0, u[15] || 0, u[16] || 0, u[17] || 0, scoreCell(u[12])].concat(graded ? [unitGradeHtml(u[12], unitSlotInGame(g, u))] : []);
       const otherRow = (o) => [`<span class="detail-sub">All other combinations (${o[2]})</span>`, toiStr(o[3]), o[4], o[5], o[6], o[7], o[8].toFixed(2), o[9].toFixed(2),
         o[10], o[11], o[12], o[13], o[14], o[15], scoreCell(o[16])];
       // each player's name opens his page; a "unit" link after the names opens the unit's page (on the hosted site; the live view has no pages)
@@ -1051,21 +1062,22 @@ const GameView = (() => {
       const unitBody = (type, periods, team) => {
         const rows = g.units.filter(u => u[1] === type && u[0] === team).map(u => unitInPeriods(u, periods)).filter(Boolean).sort((a, b) => b[2] - a[2]);
         const others = (g.uo || []).filter(o => o[1] === type && o[0] === team).map(o => othersInPeriods(o, periods)).filter(Boolean);
-        const body = rows.map(u => unitRow(u, unitText(u)));
-        if (others.length) body.push(otherRow(others[0]));
+        const graded = !periods && (type === "line" || type === "pair");
+        const body = rows.map(u => unitRow(u, unitText(u), graded));
+        if (others.length) { const o = otherRow(others[0]); body.push(graded ? o.concat([""]) : o); }
         return body;
       };
       const UNIT_SECTIONS = [["line", "Forward lines"], ["pair", "Defense pairs"], ["pp", "Power-play units"], ["pk", "Penalty-kill units"],
         ["ev4", "4-on-4 units"], ["ev3", "3-on-3 units"]];
       // long unit tables scroll inside a short box with the header pinned, so showing every unit doesn't stretch the page
-      const unitTable = (body) => `<div class="unit-scroll">${statTable(unitCols, body)}</div>`
+      const unitTable = (body, graded) => `<div class="unit-scroll">${statTable(graded ? gradedCols : unitCols, body)}</div>`
         + (body.length > 8 ? `<div class="scroll-hint">${body.length} rows &middot; scroll the table to see them all</div>` : "");
       const unitSplitNote = unitPeriods && g.units.some(u => u[18] === undefined)
         ? '<div class="panel-caption">This game predates the per-period unit split, so unit tables show the full game.</div>' : "";
       const unitSectionsFor = (teams) => teams.map(team => {
         const parts = UNIT_SECTIONS.filter(([t]) => sit.unitTypes.includes(t)).map(([t, title]) => {
           const body = unitBody(t, unitPeriods, team);
-          return body.length ? `<div class="detail-h3">${escapeHtml(team)} ${title.toLowerCase()}</div>` + unitTable(body) : "";
+          return body.length ? `<div class="detail-h3">${escapeHtml(team)} ${title.toLowerCase()}</div>` + unitTable(body, !unitPeriods && (t === "line" || t === "pair")) : "";
         }).join("");
         return parts ? `<div class="gv-group">${links.team(team)} lines, pairs &amp; special teams</div>${parts}` : "";
       }).join("") || '<div class="detail-h3">Lines, pairs &amp; special teams</div><div class="empty">No unit data in this view.</div>';
@@ -1214,9 +1226,9 @@ const GameView = (() => {
             const us = g.units.filter(u => u[0] === team && u[1] === type && u[2] >= 180).sort((a, b) => b[12] - a[12]);
             if (!us.length) return;
             const pick = us.length === 1 ? [["only one", us[0]]] : [["best", us[0]], ["worst", us[us.length - 1]]];
-            pick.forEach(([tag, u]) => rows.push([`${label} <span class="detail-sub">${tag}</span>`, unitText(u), toiStr(u[2]), `${u[6]}&ndash;${u[7]}`, `${u[8].toFixed(2)}&ndash;${u[9].toFixed(2)}`, scoreCell(u[12])]));
+            pick.forEach(([tag, u]) => rows.push([`${label} <span class="detail-sub">${tag}</span>`, unitText(u), toiStr(u[2]), `${u[6]}&ndash;${u[7]}`, `${u[8].toFixed(2)}&ndash;${u[9].toFixed(2)}`, scoreCell(u[12]), unitGradeHtml(u[12], unitSlotInGame(g, u))]));
           });
-          return rows.length ? statTable([{ label: "" }, { label: "Unit" }, { label: "TOI", num: true }, { label: "GF&ndash;GA", num: true }, { label: "xGF&ndash;xGA", num: true }, { label: "Unit Score", num: true }], rows)
+          return rows.length ? statTable([{ label: "" }, { label: "Unit" }, { label: "TOI", num: true }, { label: "GF&ndash;GA", num: true }, { label: "xGF&ndash;xGA", num: true }, { label: "Unit Score", num: true }, { label: "Grade" }], rows)
             : '<div class="empty">No line or pair had 3:00 together.</div>';
         };
         const unitsHtml = `<div class="two-up gv-units">${[g.away, g.home].map(team => `<div><div class="board-sub">${links.team(team)}</div>${teamUnits(team)}</div>`).join("")}</div>`;
