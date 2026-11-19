@@ -478,6 +478,7 @@ def compact_game(g: dict) -> dict:
             for u in g["units"]
         ],
         "stars": g["stars"], "ns": int(g["no_shifts"]), "uo": g["unit_others"],
+        **({"mu": g["matchups"]} if g.get("matchups") else {}),
     }
 
 

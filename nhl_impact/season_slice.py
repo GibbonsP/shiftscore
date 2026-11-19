@@ -10,7 +10,7 @@ import os
 from . import db
 
 GAME_TABLES = [
-    "shifts", "events", "player_game_stats", "player_game_impact", "unit_game_stats", "unit_period_stats", "goalie_game_stats",
+    "shifts", "events", "player_game_stats", "player_game_impact", "unit_game_stats", "unit_period_stats", "unit_matchup_stats", "goalie_game_stats",
 ]
 
 

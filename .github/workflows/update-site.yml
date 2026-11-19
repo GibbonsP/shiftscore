@@ -67,6 +67,10 @@ jobs:
       - name: Restore state (database and last build)
         run: python ci/state.py pull
 
+      - name: Fill in line and pair matchups for games that lack them
+        id: fill
+        run: python ci/backfill_matchups.py
+
       - name: Full rebuild of every season (only when asked for)
         if: inputs.full_rebuild
         run: python build_artifact.py
@@ -87,5 +91,5 @@ jobs:
           command: pages deploy site --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main --commit-dirty=true
 
       - name: Save state (when new games were ingested or after a full rebuild)
-        if: steps.update.outputs.updated == 'true' || inputs.full_rebuild
+        if: steps.update.outputs.updated == 'true' || inputs.full_rebuild || steps.fill.outputs.filled == 'true'
         run: python ci/state.py push

@@ -113,6 +113,17 @@ def build_games(conn, unit_keys: set | None = None, pipeline=None) -> list[dict]
     ):
         unit_rows[r[0]].append(r)
 
+    # who each line and pair played against at 5-on-5 (matchups.py), keyed by game
+    matchup_rows = defaultdict(list)
+    try:
+        for r in conn.execute(
+            """SELECT game_id, team_id, unit_type, player_ids, opp_type, opp_player_ids, toi_sec, cf, ca, gf, ga, xgf, xga
+               FROM unit_matchup_stats WHERE unit_type != 'none'"""
+        ):
+            matchup_rows[r[0]].append(r)
+    except Exception:   # a database from before the table existed
+        pass
+
     # the same units split by period: the recap's period filter and its overtime section sum these
     period_rows = defaultdict(list)  # (game, team, type, player_ids) -> [[period, toi, cf, ca, gf, ga, xgf, xga, hdcf, hdca, mdcf, mdca, ldcf, ldca, score]]
     for r in conn.execute(
@@ -237,6 +248,20 @@ def build_games(conn, unit_keys: set | None = None, pipeline=None) -> list[dict]
                 }
             )
 
+        # matchups as rows [side, own slot, opposing slot, toi, cf, ca, gf, ga, xgf, xga]; a slot is L1-L4 / P1-P3 (rank by ice time among the
+        # team's lines or pairs that game, the same ranking the page uses for grades), side is 0 for the away team and 1 for the home team
+        slot_of_unit = {}
+        for ut_, n_ in (("line", 4), ("pair", 3)):
+            for tid_ in (home_id, away_id):
+                ranked = sorted([u for u in unit_rows.get(game_id, []) if u[1] == tid_ and u[2] == ut_], key=lambda u: -u[4])[:n_]
+                for i_, u in enumerate(ranked):
+                    slot_of_unit[(tid_, ut_, u[3])] = ("L" if ut_ == "line" else "P") + str(i_ + 1)
+        matchups = []
+        for _g, tid, ut, pids, ot, opids, toi, cf, ca, gf, ga, xgf, xga in matchup_rows.get(game_id, []):
+            a_, b_ = slot_of_unit.get((tid, ut, pids)), slot_of_unit.get((home_id if tid == away_id else away_id, ot, opids))
+            if a_ and b_:
+                matchups.append([1 if tid == home_id else 0, a_, b_, toi, cf, ca, gf, ga, round(xgf or 0, 2), round(xga or 0, 2)])
+
         everyone = [dict(s, team=abbrev[tid]) for tid, lst in sk.items() for s in lst if s["adj"] is not None]
         stars = []
         for s in sorted(everyone, key=lambda s: -s["adj"])[:3]:
@@ -253,7 +278,7 @@ def build_games(conn, unit_keys: set | None = None, pipeline=None) -> list[dict]
                 "by_period": by_period, "team_cells": team_cells, "shots": slices["shots"],
                 "goals": goals, "penalties": penalties,
                 "skaters": {"home": sk[home_id], "away": sk[away_id]},
-                "goalies": goalies, "units": units, "stars": stars,
+                "goalies": goalies, "units": units, "stars": stars, "matchups": matchups,
                 "unit_others": [
                     [t, ty] + [_r2(x) for x in row] + [_others_by_period(others_p.get((t, ty)))]
                     for (t, ty), row in others.items()

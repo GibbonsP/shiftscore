@@ -143,6 +143,24 @@ CREATE TABLE IF NOT EXISTS unit_game_stats (
     PRIMARY KEY (game_id, team_id, unit_type, player_ids)
 );
 
+-- who each line and pair played against at 5-on-5 (matchups.py): one row per unit and opposing unit, from the unit's own team's side
+CREATE TABLE IF NOT EXISTS unit_matchup_stats (
+    game_id INTEGER,
+    team_id INTEGER,
+    unit_type TEXT,        -- 'line' | 'pair'
+    player_ids TEXT,
+    opp_type TEXT,         -- 'line' | 'pair' (the other team's)
+    opp_player_ids TEXT,
+    toi_sec INTEGER DEFAULT 0,
+    cf INTEGER DEFAULT 0,
+    ca INTEGER DEFAULT 0,
+    gf INTEGER DEFAULT 0,
+    ga INTEGER DEFAULT 0,
+    xgf REAL DEFAULT 0,
+    xga REAL DEFAULT 0,
+    PRIMARY KEY (game_id, team_id, unit_type, player_ids, opp_type, opp_player_ids)
+);
+
 -- the same unit numbers split by period (1-4; the game recap's period filter and overtime section read this).
 -- unit_game_stats keeps the full-game totals every other consumer uses.
 CREATE TABLE IF NOT EXISTS unit_period_stats (

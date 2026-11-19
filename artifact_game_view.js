@@ -859,6 +859,8 @@ const GameView = (() => {
       if (tab) { state.tab = tab.dataset.gvTab; renderBody(); return; }
       const tm2 = ev.target.closest("button[data-gv-team]");
       if (tm2) { state.team = tm2.dataset.gvTeam; renderBody(); return; }
+      const mub = ev.target.closest("button[data-gv-mu]");
+      if (mub) { state.mu = mub.dataset.gvMu; renderBody(); return; }
       const kb = ev.target.closest("button[data-gv-kind]");
       if (kb) { state.mapKind = kb.dataset.gvKind; renderBody(); return; }
       const sh = ev.target.closest("button[data-gv-share]");
@@ -1074,6 +1076,39 @@ const GameView = (() => {
         + (body.length > 8 ? `<div class="scroll-hint">${body.length} rows &middot; scroll the table to see them all</div>` : "");
       const unitSplitNote = unitPeriods && g.units.some(u => u[18] === undefined)
         ? '<div class="panel-caption">This game predates the per-period unit split, so unit tables show the full game.</div>' : "";
+      // ---- matchups: each of a team's lines and pairs against each of the other team's lines and pairs at 5-on-5 (whole game only).
+      // Rows are the team's own units, columns the opposing units (L1-L4, P1-P3 by ice time that game); each cell shows the time they shared
+      // the ice and, under it, how that stretch went in the chosen measure.
+      const MU_METRICS = [["xg", "Expected goals"], ["cf", "Shot attempts"], ["g", "Goals"]];
+      const muMetric = state.mu || "xg";
+      const muSlots = ["L1", "L2", "L3", "L4", "P1", "P2", "P3"];
+      const slotUnitsOf = (team) => { const m = {}; [["line", 4, "L"], ["pair", 3, "P"]].forEach(([t, n, tag]) =>
+        g.units.filter(u => u[0] === team && u[1] === t).sort((a, b) => b[2] - a[2]).slice(0, n).forEach((u, i) => { m[tag + (i + 1)] = u; })); return m; };
+      const unitNames = (u) => u[3].map(id => String(names[id] || id).split(" ").slice(-1)[0]).join(", ");
+      const matchupFor = (sd) => {
+        const side = sd === "away" ? 0 : 1, own = slotUnitsOf(g[sd]), opp = slotUnitsOf(g[sd === "away" ? "home" : "away"]);
+        const cell = {}; (g.mu || []).filter(r => r[0] === side).forEach(r => { cell[r[1] + "|" + r[2]] = r; });
+        const rowsList = muSlots.filter(t => own[t]), colsList = muSlots.filter(t => opp[t]);
+        if (!rowsList.length || !colsList.length) return "";
+        const fmt = (r) => {
+          if (!r) return '<span class="detail-sub">&ndash;</span>';
+          const [, , , toi, cf, ca, gf, ga, xgf, xga] = r;
+          const [d, txt] = muMetric === "xg" ? [xgf - xga, signed2(xgf - xga)] : muMetric === "cf" ? [cf - ca, `${cf}&ndash;${ca}`] : [gf - ga, `${gf}&ndash;${ga}`];
+          return `<span class="mu-toi">${toiStr(toi)}</span><br><span class="${d > 0 ? "pos" : d < 0 ? "neg" : ""}" title="${toiStr(toi)} together &middot; shot attempts ${cf}&ndash;${ca} &middot; goals ${gf}&ndash;${ga} &middot; xG ${xgf.toFixed(2)}&ndash;${xga.toFixed(2)}">${txt}</span>`;
+        };
+        const head = `<tr><th></th>${colsList.map(t => `<th class="num"><b>${t}</b><br><span class="detail-sub mu-names">${escapeHtml(unitNames(opp[t]))}</span></th>`).join("")}</tr>`;
+        const body = rowsList.map(t => `<tr><td><b>${t}</b> <span class="detail-sub">${escapeHtml(unitNames(own[t]))}</span></td>${colsList.map(c => `<td class="num mu-cell">${fmt(cell[t + "|" + c])}</td>`).join("")}</tr>`).join("");
+        return `<div class="gv-group">${links.team(g[sd])} against ${escapeHtml(g[sd === "away" ? "home" : "away"])}'s lines and pairs</div>
+          <div class="table-scroll"><table class="mu-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+      };
+      const matchupSectionsFor = (teams) => {
+        if (unitPeriods || !(g.mu && g.mu.length)) return "";
+        const tables = teams.map(matchupFor).join("");
+        if (!tables) return "";
+        const chips = `<div class="chips gv-mupick" role="group" aria-label="Matchup measure">${MU_METRICS.map(([k, label]) => `<button type="button" class="chip" aria-pressed="${muMetric === k}" data-gv-mu="${k}">${label}</button>`).join("")}</div>`;
+        return `<div class="detail-h3">Matchups</div>${chips}${tables}
+          <div class="panel-caption">Each row is one of the team's lines or pairs, each column one of the other team's, ranked by ice time that game. Every cell is the time they spent on the ice against each other at 5-on-5, with the shot-quality balance for that stretch under it: expected goals for minus against, shot attempts for&ndash;against, or goals. Green means the row's unit came out ahead. Small stretches are small samples, so read the big blocks of time.</div>`;
+      };
       const unitSectionsFor = (teams) => teams.map(team => {
         const parts = UNIT_SECTIONS.filter(([t]) => sit.unitTypes.includes(t)).map(([t, title]) => {
           const body = unitBody(t, unitPeriods, team);
@@ -1313,7 +1348,7 @@ const GameView = (() => {
           <div>${gameStory.perf}<div class="detail-h3">Penalties</div>${pens}${gameStory.st}</div></div>
         ${gameStory.danger}${gameStory.units}`;
       else if (tab === "skaters") pane = `${filterNote}${teamSides.map(sd => `<div class="detail-h3">${escapeHtml(g[sd])} skaters</div>${sd === teamSides[0] ? skNote : ""}${skTable(sd)}`).join("")}`;
-      else if (tab === "units") pane = `${filterNote}${unitSplitNote}${unitSectionsFor(teamSides.map(sd => g[sd]))}${gameStory.stDetail}`;
+      else if (tab === "units") pane = `${filterNote}${unitSplitNote}${unitSectionsFor(teamSides.map(sd => g[sd]))}${matchupSectionsFor(teamSides)}${gameStory.stDetail}`;
       else if (tab === "shots") pane = `${filterNote}<div class="detail-h3">Goalies</div>${goalies}
         ${goalieDanger ? `<div class="detail-h3">Goalies by shot danger</div>${goalieDanger}<div class="panel-caption">Shots on goal split by how likely each was to score. GSAx is expected goals against minus goals allowed in that band, so it shows where a goalie won or lost the game: stopping the dangerous shots, or just the routine ones.</div>` : ""}
         ${chartSections}`;

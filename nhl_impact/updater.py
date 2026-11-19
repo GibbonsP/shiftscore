@@ -23,7 +23,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import api, db, goalie_stats, impact, ingest, units, xg_model, xg_stats
+from . import api, db, goalie_stats, impact, ingest, matchups, units, xg_model, xg_stats
 from .live import load_score_factors
 
 SETTLE_SEC = int(3.5 * 3600)   # a game ends about 2.5-3 hours after the puck drops and the shift chart follows; games still missing shifts are retried
@@ -103,6 +103,7 @@ def process_game(conn, game_id: int, pipeline, factors: dict) -> None:
     ingest.compute_extra_stats(conn, game_id)
     units.compute_game_units(conn, game_id)
     xg_stats.compute_game_xg(conn, game_id, pipeline, factors)
+    matchups.compute_game_matchups(conn, game_id)
     goalie_stats.compute_game_goalie_stats(conn, game_id, pipeline)
     impact.compute_game_impacts(conn, game_id)
 
