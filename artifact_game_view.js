@@ -1255,7 +1255,7 @@ const GameView = (() => {
             <div class="panel-caption">Shots on goal with the goalie in net, by how likely each was to score. Under each count: goals scored and the summed chance of scoring (xG) from those shots, which runs a little different from the whole-game expected goals because that counts every unblocked attempt. <span class="dz-key"><i class="over"></i>&#9650; green: scored more than expected from those shots<i class="under"></i>&#9660; red: fewer than expected</span>. Shading is judged against the size of the expectation, so only unusual gaps are marked. Empty-net shots have no expected goals, and the total's expected goals leave them out. Shot attempts ${T.away.attempts}&ndash;${T.home.attempts}. Whole game, every situation.</div>`;
           dangerHtml = dangerTable;
           verdictHtml = `<div class="gv-verdict">${line}</div>
-            <div class="gv-wp-head"><span>${escapeHtml(g.away)}</span><span class="detail-sub">chance to win on shot quality (${(100 * pt).toFixed(0)}% of regulation ties go to overtime)</span><span>${escapeHtml(g.home)}</span></div>${bar}`;
+            <div class="gv-wp-head"><span>${escapeHtml(g.away)}</span><span class="detail-sub">chance to win on shot quality (${(100 * pt).toFixed(0)}% chance of overtime; it is split evenly)</span><span>${escapeHtml(g.home)}</span></div>${bar}`;
           dangerHtml = dangerTable;
         }
         // --- best and worst skaters
