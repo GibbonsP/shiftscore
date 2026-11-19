@@ -353,7 +353,7 @@ function renderTable(tab, filterText, minToi, dir, limitRows) {
       : boardRows(tab, dir).length ? 'Nobody meets that minimum.' : 'Not enough games played yet this season.') + '</div>';
   }
 
-  let html = '<div class="table-scroll"><table><thead><tr><th class="rank">#</th>';
+  let html = '<div class="table-scroll"><table class="auto-sort"><thead><tr><th class="rank">#</th>';
   for (const c of tab.cols) html += `<th class="${c.num ? "num" : ""}">${c.label}</th>`;
   html += "</tr></thead><tbody>";
   filtered.forEach((row, i) => {
@@ -736,7 +736,7 @@ function teamBoardHtml(state) {
   const rows = teams.map(t => `<tr class="clickable" data-open-team="${t.abbrev}"><td class="rank">${ordinal(ranks[t.abbrev])}</td><td>${logoSpan(t.abbrev)}${t.abbrev}</td>
       <td class="num strong">${fmtTeamStat(stat, teamValue(t, k))}</td><td class="barcell">${bar(teamValue(t, k))}</td>
       <td class="num">${t.w}&ndash;${t.l}&ndash;${t.otl}</td><td class="num">${orDash(t.pts)}</td><td class="num">${orDash(t.xgf_pct, v => Number(v).toFixed(1))}</td></tr>`).join("");
-  return `${picker}<div class="table-scroll"><table><thead><tr><th class="rank">Rank</th><th>Team</th><th class="num">${stat.label}</th><th></th><th class="num">W&ndash;L&ndash;OTL</th><th class="num">PTS</th><th class="num">xGF%</th></tr></thead><tbody>${rows}</tbody></table></div>
+  return `${picker}<div class="table-scroll"><table class="auto-sort"><thead><tr><th class="rank">Rank</th><th>Team</th><th class="num">${stat.label}</th><th></th><th class="num">W&ndash;L&ndash;OTL</th><th class="num">PTS</th><th class="num">xGF%</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="panel-caption">${stat.hi ? "Higher is better." : "Lower is better."} Ranks run 1st to ${ordinal(teams.length)} across this season's teams; ties share a rank. Click a team to see all of its ranks.</div>`;
 }
 
@@ -915,7 +915,7 @@ function teamGameLogHtml(data) {
   const head2 = `<tr>${th("Date")}${th("Opponent")}${th("Result")}${th("GF", 1)}${th("GA", 1)}${th("SOG", 1)}${th("SOGA", 1)}${th("CF%", 1)}${th("xGF", 1)}${th("xGA", 1)}${th("xGF%", 1)}
     ${th("HD", 1)}${th("MD", 1)}${th("LD", 1)}${th("PP goals", 1)}${th("PIM", 1)}${th("FO%", 1)}${th("Skater")}${th("Forward line")}${th("D pair")}${th("Goalie")}${th("Grade")}</tr>`;
   return `<div class="detail-h3">Game log <span class="detail-sub">newest first</span></div>
-    <div class="table-scroll"><table class="glog"><thead>${head1}${head2}</thead><tbody>${rows.reverse().join("")}${totRow}</tbody></table></div>
+    <div class="table-scroll"><table class="glog auto-sort"><thead>${head1}${head2}</thead><tbody>${rows.reverse().join("")}${totRow}</tbody></table></div>
     <div class="panel-caption">One row per game. Shots are shots on goal (SOG for, SOGA against); CF% is the team's share of shot attempts and xGF% its share of expected goals, green when above 50%. Shot danger counts shots on goal by how likely each was to score: HD is high (14%+), MD medium (7&ndash;14%), LD low (under 7%), green when the team had more than its opponent. PP goals is power-play goals for&ndash;against. Best of the night is the top Adjusted Game Score among skaters, and the best forward line and defense pair by Unit Score (3:00 together at least). The goalie's grade is from goals saved above expected in the game; the small figure beside his name is saves/shots.</div>`;
 }
 // shot danger on the power play (shots for) and the penalty kill (shots against), season totals for the team
@@ -966,7 +966,7 @@ function playersListHtml(filterText) {
   const rows = (S().players_index || []).filter(p => p.pos !== "G" && (!q || p.name.toLowerCase().includes(q)));
   if (!rows.length) return '<div class="empty">No players match that filter.</div>';
   const sorted = rows.slice().sort((a, b) => b.gp - a.gp);
-  let html = '<div class="table-scroll"><table><thead><tr><th>Player</th><th>Pos</th><th>Team</th><th class="num">GP</th></tr></thead><tbody>';
+  let html = '<div class="table-scroll"><table class="auto-sort"><thead><tr><th>Player</th><th>Pos</th><th>Team</th><th class="num">GP</th></tr></thead><tbody>';
   sorted.forEach(p => {
     html += `<tr class="clickable" data-open-player="${p.id}" data-player-team="${p.team}"><td>${avatarSpan(p.id, p.name)}${escapeHtml(p.name)}</td><td>${p.pos}</td><td>${logoSpan(p.team)}${p.team}</td><td class="num">${p.gp}</td></tr>`;
   });
@@ -1165,7 +1165,7 @@ function playerDetailHtml(playerId, teamData, sec, tm) {
     const cols = [col(0), col(3), col(6)], tot = [0, 1, 2].map(k => cols.reduce((x, c) => x + c[k], 0));
     const cell = (c, k) => k === 0 ? c[0] : k === 1 ? c[1] : k === 2 ? (c[0] ? (1 - c[1] / c[0]).toFixed(3) : "&ndash;") : k === 3 ? c[2].toFixed(1) : scoreCell(c[2] - c[1]);
     return statTable([{ label: "Shot danger" }, ...BANDS_HEAD],
-      ["Shots faced", "Goals allowed", "Sv%", "xGA", "GSAx"].map((label, k) => [label, ...cols.map(c => cell(c, k)), cell(tot, k)]));
+      ["Shots faced", "Goals allowed", "Sv%", "xGA", "GSAx"].map((label, k) => [label, ...cols.map(c => cell(c, k)), cell(tot, k)]), { sort: false });
   })() : "";
   const log = statTable(
     [{ label: "Date" }, { label: "Team" }, { label: "Opp" }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
@@ -1265,7 +1265,7 @@ async function fillPlayerSeasons(seasonAtStart) {
   }
   const head = isGoalie ? ["Season", "Team", "GP", "Shots", "GA", "Sv%", "GSAx"] : ["Season", "Team", "GP", "G", "A", "P", "Avg Raw", "Avg Adjusted", "TOI / GP", "xGF%"];
   box.innerHTML = rows.length
-    ? `<div class="table-scroll"><table class="season-table"><thead><tr>${head.map((h, i) => `<th class="${i > 1 ? "num" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    ? `<div class="table-scroll"><table class="season-table auto-sort"><thead><tr>${head.map((h, i) => `<th class="${i > 1 ? "num" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
        <div class="panel-caption">Click a season to open his page for that year.</div>`
     : '<div class="empty">No earlier seasons.</div>';
 }
@@ -1395,7 +1395,7 @@ function previewFormHtml(abbr, td) {
   const rows = td.schedule.slice(-5).reverse().map(s => {
     const x = s.xgf !== null && s.xgf !== undefined && s.xga !== null && s.xga !== undefined && s.xgf + s.xga > 0 ? (100 * s.xgf / (s.xgf + s.xga)).toFixed(0) + "%" : "";
     return `<tr><td>${s.date.slice(5)}</td><td>${s.loc} ${s.opponent}</td><td class="${s.result === "W" ? "pos" : "neg"}">${s.result} ${s.score}${s.outcome && s.outcome !== "REG" ? " (" + s.outcome + ")" : ""}</td><td class="num">${x}</td></tr>`; }).join("");
-  return `<div><div class="detail-h3">${teamLink(abbr)} last 5 games</div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Opp</th><th>Result</th><th class="num">xGF%</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  return `<div><div class="detail-h3">${teamLink(abbr)} last 5 games</div><div class="table-scroll"><table class="auto-sort"><thead><tr><th>Date</th><th>Opp</th><th>Result</th><th class="num">xGF%</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 // players to watch: the best and the worst average Adjusted Game Score over the team's last five games (at least three of them played)
@@ -1409,7 +1409,7 @@ function previewWatchHtml(abbr, td) {
   }).filter(Boolean).sort((a, b) => b.avg - a.avg);
   const pick = (rows, label) => rows.map(r => `<tr><td>${label}</td><td>${playerLink(r.pid, abbr, r.name)}</td><td class="num">${gsCell(r.avg, "avg", true)}</td><td class="num">${r.g}G ${r.a}A in ${r.n}</td><td class="num">${r.season === undefined || r.season === null ? "" : signed2(r.season)}</td></tr>`).join("");
   const hot = list.slice(0, 3), cold = list.slice(-2).filter(r => !hot.includes(r)).reverse();
-  return `<div><div class="detail-h3">${teamLink(abbr)}</div><div class="table-scroll"><table><thead><tr><th></th><th>Player</th><th class="num">Last 5 avg</th><th class="num">Production</th><th class="num">Season avg</th></tr></thead>
+  return `<div><div class="detail-h3">${teamLink(abbr)}</div><div class="table-scroll"><table class="auto-sort"><thead><tr><th></th><th>Player</th><th class="num">Last 5 avg</th><th class="num">Production</th><th class="num">Season avg</th></tr></thead>
     <tbody>${pick(hot, '<span class="pos">Hot</span>')}${pick(cold, '<span class="neg">Cold</span>')}</tbody></table></div></div>`;
 }
 
@@ -1419,7 +1419,7 @@ function previewGoaliesHtml(abbr, td) {
   const starts = {}; recent.forEach(s => { if (s.gk) starts[s.gk[0]] = (starts[s.gk[0]] || 0) + 1; });
   const rows = (td.goalies || []).slice().sort((a, b) => b.gp - a.gp).map(g => `<tr><td>${playerLink(g.player_id, abbr, g.name)}${lastStarter && lastStarter[0] === g.player_id ? ' <small class="detail-sub">started last game</small>' : ""}</td>
     <td class="num">${g.gp}</td><td class="num">${starts[g.player_id] || 0} of ${recent.length}</td><td class="num">${scoreCell(g.gsax)}</td><td class="num">${g.sv_pct === null || g.sv_pct === undefined ? "" : g.sv_pct.toFixed(3).replace(/^0/, "")}</td></tr>`).join("");
-  return `<div><div class="detail-h3">${teamLink(abbr)}</div><div class="table-scroll"><table><thead><tr><th>Goalie</th><th class="num">GP</th><th class="num">Last 10 starts</th><th class="num">GSAx</th><th class="num">Sv%</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  return `<div><div class="detail-h3">${teamLink(abbr)}</div><div class="table-scroll"><table class="auto-sort"><thead><tr><th>Goalie</th><th class="num">GP</th><th class="num">Last 10 starts</th><th class="num">GSAx</th><th class="num">Sv%</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 // the lines and pairs from a team's last game, graded the way the lines & pairs card grades them
@@ -1434,12 +1434,12 @@ async function previewLineupHtml(abbr, td) {
   const row = (r) => `<tr><td><b>${r.slot}</b></td><td>${r.u[3].map(id => playerTextLink(id, abbr, lastName(nameOf(id)))).join(", ")}</td><td class="num">${toiStr(r.u[2])}</td>
     <td class="num"><span class="gs gs-t${r.tier}">${r.u[12] > 0 ? "+" : ""}${r.u[12].toFixed(2)} ${GS_TIER_NAME[r.tier]}</span></td></tr>`;
   return `<div><div class="detail-h3">${teamLink(abbr)} <span class="detail-sub">from ${last.loc === "@" ? "@" : "vs"} ${last.opponent}, ${prettyDay(last.date)}</span></div>
-    <div class="table-scroll"><table><thead><tr><th></th><th>Players</th><th class="num">TOI</th><th class="num">Unit score</th></tr></thead><tbody>${pick("line", 4, "L").map(row).join("")}${pick("pair", 3, "P").map(row).join("")}</tbody></table></div></div>`;
+    <div class="table-scroll"><table class="auto-sort"><thead><tr><th></th><th>Players</th><th class="num">TOI</th><th class="num">Unit score</th></tr></thead><tbody>${pick("line", 4, "L").map(row).join("")}${pick("pair", 3, "P").map(row).join("")}</tbody></table></div></div>`;
 }
 
 function previewMeetingsHtml(sch, th) {
   const away = sch[2], meetings = (th.schedule || []).filter(s => s.opponent === away);
-  const body = meetings.length ? `<table><thead><tr><th>Date</th><th>Where</th><th>Result for ${sch[3]}</th></tr></thead><tbody>${meetings.map(s =>
+  const body = meetings.length ? `<table class="auto-sort"><thead><tr><th>Date</th><th>Where</th><th>Result for ${sch[3]}</th></tr></thead><tbody>${meetings.map(s =>
     `<tr><td>${prettyDay(s.date)}</td><td>${s.loc === "@" ? "at " + away : "at " + sch[3]}</td><td class="${s.result === "W" ? "pos" : "neg"}">${s.result} ${s.score}${s.outcome && s.outcome !== "REG" ? " (" + s.outcome + ")" : ""}</td></tr>`).join("")}</tbody></table>`
     : '<div class="empty">These teams have not played each other yet this season.</div>';
   return `<div class="detail-h3">Head to head <span class="detail-sub">this season</span></div>${body}`;
@@ -1482,7 +1482,7 @@ function gamesListHtml(filterText) {
     .filter(g => !q || (g[2] + " " + g[4] + " " + g[1] + " " + g[7]).toLowerCase().includes(q))
     .sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : b[0] - a[0]));
   if (!rows.length) return '<div class="empty">No games match that filter.</div>';
-  let html = '<div class="table-scroll"><table><thead><tr><th>Date</th><th>Away</th><th class="num"></th><th>Home</th><th class="num"></th><th>Top performer</th><th class="num">Raw</th><th class="num">Adjusted</th></tr></thead><tbody>';
+  let html = '<div class="table-scroll"><table class="auto-sort"><thead><tr><th>Date</th><th>Away</th><th class="num"></th><th>Home</th><th class="num"></th><th>Top performer</th><th class="num">Raw</th><th class="num">Adjusted</th></tr></thead><tbody>';
   rows.forEach(g => {
     const tag = g[6] === "REG" ? "" : ` <span class="detail-sub">${g[6]}</span>`;
     html += `<tr class="clickable" data-open-game="${g[0]}" data-game-home="${g[4]}"><td>${g[1]}</td><td>${logoSpan(g[2])}${g[2]}</td><td class="num">${g[3]}</td><td>${logoSpan(g[4])}${g[4]}</td><td class="num">${g[5]}${tag}</td><td>${g[10] ? avatarSpan(g[10], g[7]) : ""}${escapeHtml(g[7])}</td><td class="num">${g[8] === null || g[8] === undefined ? "&ndash;" : g[8].toFixed(2)}</td><td class="num">${g[9] === null || g[9] === undefined ? "&ndash;" : gsCell(g[9], "adj", true)}</td></tr>`;

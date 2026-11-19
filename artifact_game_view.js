@@ -81,9 +81,11 @@ function goalieTags(g) {
 }
 const gradeChip = (gr) => `<span class="grade g-${gr}">${GRADE_LABEL[gr]}</span>`;
 
-function statTable(headers, rows) {
+// Tables of comparable rows (a game log, a roster, a unit list...) sort when a column header is clicked: anything with at least four rows, unless the
+// caller opts out ({ sort: false }) because the rows are labels, not records (a stat-by-stat comparison). The click handler is at the bottom of this file.
+function statTable(headers, rows, opts) {
   if (!rows.length) return '<div class="empty">No rows.</div>';
-  let html = '<div class="table-scroll"><table><thead><tr>';
+  let html = `<div class="table-scroll"><table${rows.length >= 4 && !(opts && opts.sort === false) ? ' class="auto-sort"' : ""}><thead><tr>`;
   headers.forEach(h => { html += `<th class="${h.num ? "num" : ""}">${h.label}</th>`; });
   html += "</tr></thead><tbody>";
   rows.forEach(r => {
@@ -1150,7 +1152,7 @@ const GameView = (() => {
           orow("Time on ice", s2 => toiStr(ots[s2].toi)), orow("Shots on goal", s2 => ots[s2].sog), orow("Shot attempts", s2 => ots[s2].attempts),
           orow("Expected goals (xG)", s2 => teamXg(g.shots, s2 === "away" ? 0 : 1, [4]).toFixed(2)), orow("High-danger shots on goal", s2 => ots[s2].hdc),
           orow("Power-play time", s2 => toiStr(named(sum(g.tc[s2], TF, OT, [2]), TF).toi)),
-        ]);
+        ], { sort: false });
         const KIND = { line: "Line", pair: "Pair", pp: "PP", pk: "PK", ev4: "4v4", ev3: "3v3" };
         const otUnitsFor = (team) => {
           const rows = [];
@@ -1424,4 +1426,60 @@ const GameView = (() => {
     },
     saveCard: (g, key, logos) => { const { kind, side } = parseCardKey(key); return saveCardImage(shareSvg(kind, g, side, logos || null), cardFileName(g, kind, side)); },
   };
+})();
+
+// ---- click-to-sort for every table marked class="auto-sort" (statTable adds it to tables of four or more comparable rows; the hand-built tables
+// carry it too). Click a header to sort by that column: numbers and times high-to-low first, text A-Z first; click again to reverse, a third
+// time to go back to the original order. Blank cells always sort last, and a totals row ("Season", "Total", "All other ...") stays at the bottom.
+(function () {
+  if (typeof document === "undefined" || window.__autoSortWired) return;
+  window.__autoSortWired = true;
+  const cellKey = (td) => {
+    const text = td.textContent.replace(/\s+/g, " ").trim();
+    if (!text || /^[–—-]$/.test(text)) return null;
+    const m = text.replace(/−/g, "-");
+    let x;
+    if ((x = m.match(/^(\d+):(\d{2})$/))) return { n: +x[1] * 60 + +x[2], s: text };                        // a time on ice
+    if ((x = m.match(/^([+\-–]?)(\d+(?:\.\d+)?)%?$/))) return { n: (x[1] === "-" || x[1] === "–" ? -1 : 1) * parseFloat(x[2]), s: text };   // 12, +0.45, 53%
+    if ((x = m.match(/^(\d+(?:\.\d+)?)\s*–\s*(\d+(?:\.\d+)?)$/))) return { n: parseFloat(x[1]) - parseFloat(x[2]), s: text };               // 8-6: for minus against
+    const tier = td.querySelector('[class*="gs-t"]');
+    if (tier) { const t = tier.className.match(/gs-t(\d)/); if (t) return { n: +t[1], s: text }; }                               // a grade chip: by its tier
+    if ((x = m.match(/^([+\-]?\d+(?:\.\d+)?)(?!\d)/)) && !/^\d{4}-\d/.test(m) && !/^\d\d-\d\d$/.test(m)) return { n: parseFloat(x[1]), s: text };   // "5 days of rest"
+    const who = td.querySelector("[data-open-player]");                                                                            // a player's name: by last name
+    if (who) { const w = who.textContent.trim().split(" "); return { n: null, s: (w.slice(-1)[0] + " " + w.slice(0, -1).join(" ")).toLowerCase() }; }
+    return { n: null, s: text.toLowerCase() };
+  };
+  document.addEventListener("click", (ev) => {
+    const th = ev.target.closest("table.auto-sort thead th");
+    if (!th || ev.target.closest("a, button")) return;
+    const table = th.closest("table"), headRows = table.tHead.rows;
+    if (th.parentElement !== headRows[headRows.length - 1]) return;      // only the last header row names the columns
+    const col = th.cellIndex, tbody = table.tBodies[0];
+    if (!tbody) return;
+    const all = [...tbody.rows];
+    const pinned = all.filter(r => /(^|\s)(gl-total|pin)(\s|$)/.test(r.className) || /^(Total|Season|All other)/i.test((r.cells[0] || {}).textContent.trim() || ""));
+    const rows = all.filter(r => !pinned.includes(r) && r.cells.length > col);
+    rows.forEach((r, i) => { if (r.dataset.sortI === undefined) r.dataset.sortI = i; });
+    const keyed = rows.map(r => ({ r, k: cellKey(r.cells[col]) }));
+    const numeric = keyed.filter(o => o.k && o.k.n !== null).length >= keyed.filter(o => o.k).length / 2;
+    const st = table.dataset.sortCol === String(col) ? table.dataset.sortDir : "";
+    const dir = st === "" ? (numeric ? "desc" : "asc") : st === "desc" ? (numeric ? "asc" : "desc") : st === "asc" ? (numeric ? "none" : "desc") : "none";
+    const fin = numeric ? dir : dir;   // (numeric: desc, asc, original; text: asc, desc, original)
+    table.querySelectorAll("th").forEach(h => { h.removeAttribute("aria-sort"); const a = h.querySelector(".sort-arrow"); if (a) a.remove(); });
+    if (dir === "none") { table.dataset.sortCol = ""; table.dataset.sortDir = ""; keyed.sort((a, b) => a.r.dataset.sortI - b.r.dataset.sortI); }
+    else {
+      table.dataset.sortCol = String(col); table.dataset.sortDir = fin;
+      const sign = fin === "desc" ? -1 : 1;
+      keyed.sort((a, b) => {
+        if (!a.k && !b.k) return a.r.dataset.sortI - b.r.dataset.sortI;
+        if (!a.k) return 1; if (!b.k) return -1;                          // blanks last whichever way it sorts
+        const c = numeric && a.k.n !== null && b.k.n !== null ? a.k.n - b.k.n : String(a.k.s).localeCompare(String(b.k.s), undefined, { numeric: true });
+        return c ? sign * c : a.r.dataset.sortI - b.r.dataset.sortI;
+      });
+      th.setAttribute("aria-sort", fin === "desc" ? "descending" : "ascending");
+      th.insertAdjacentHTML("beforeend", `<span class="sort-arrow">${fin === "desc" ? "&#9662;" : "&#9652;"}</span>`);
+    }
+    keyed.forEach(o => tbody.appendChild(o.r));
+    pinned.forEach(r => tbody.appendChild(r));                            // totals stay at the bottom
+  });
 })();
