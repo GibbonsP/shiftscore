@@ -534,7 +534,7 @@ function unitDetailHtml(data, key) {
   );
   return `
     ${back}
-    <div class="detail-title">${escapeHtml(title)} <span class="detail-sub">${data.abbrev} &middot; ${UNIT_LABEL_SINGULAR[u.type]}</span></div>
+    ${u.card ? unitCardHtml(u, data, title) : `<div class="detail-title">${escapeHtml(title)} <span class="detail-sub">${data.abbrev} &middot; ${UNIT_LABEL_SINGULAR[u.type]}</span></div>`}
     <div class="panel-caption">${names}</div>
     <div class="panel-caption">Unit Score counts what this unit earned and allowed over its time together in each game: expected goals and goals, plus shot attempts for lines, pairs and penalty-kill units. It's a running count, so more ice time means a bigger swing &mdash; Score / 60 normalizes for that.</div>
     <div class="detail-h3">Season Summary</div>${summary}
@@ -977,6 +977,33 @@ function playersListHtml(filterText) {
 // Player card: the player's headline numbers plus a percentile bar for each stat against everyone in his group
 // (forwards, defensemen or goalies) with a real sample this season. The percentiles are computed at export time.
 const POS_LABEL = { L: "LW", C: "C", R: "RW", D: "D", G: "G" };
+// the percentile bars of a card (players and units): blue for a low percentile through a neutral grey in the middle to red for a high one
+function pctBarsHtml(c) {
+  const groupsInOrder = [...new Set(c.m.map(m => m[0]))];
+  const pctColor = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(72 - 23 * t).toFixed(0)}%)`; };
+  return groupsInOrder.map(g => `<div class="pc-block"><div class="pc-group">${g}</div>` + c.m.filter(m => m[0] === g).map(([, label, text, pct]) =>
+    `<div class="pc-row"><span class="pc-label">${label}</span>
+      <span class="pc-track">${pct === null ? "" : `<i class="pc-fill" style="width:${pct}%;background:${pctColor(pct)}"></i><b class="pc-dot" style="left:${pct}%;background:${pctColor(pct)}">${pct}</b>`}</span>
+      <span class="pc-val">${text}</span></div>`).join("") + "</div>").join("");
+}
+// a unit's card: where its numbers rank among the units of its own kind this season
+function unitCardHtml(u, data, title) {
+  const c = u.card;
+  if (!c || !c.m.length) return "";
+  const s = u.summary;
+  const head = [["GP", s.gp], ["TOI", toiStr(s.toi_sec)], ["GF-GA", `${s.gf}-${s.ga}`], ["xGF-xGA", `${s.xgf.toFixed(1)}-${s.xga.toFixed(1)}`]];
+  return `<div class="player-card unit-card">
+      <div class="pc-head">
+        <span class="faces">${u.players.map(p => avatarSpan(p.id, p.name)).join("")}</span>
+        <div class="pc-id"><div class="pc-name">${escapeHtml(title)}</div>
+          <div class="pc-sub">${logoSpan(data.abbrev)}${data.abbrev} &middot; ${UNIT_LABEL_SINGULAR[u.type]}</div></div>
+        <div class="pc-stats">${head.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("")}</div>
+      </div>
+      ${c.small ? `<div class="pc-small">Small sample: this unit is below the ice-time bar for the comparison group, so the rates and percentiles below can swing a lot from a few shifts.</div>` : ""}
+      <div class="pc-bars">${pctBarsHtml(c)}</div>
+      <div class="panel-caption">Percentile among the ${c.n} ${c.pool} with a real sample this season (at least 10% of the busiest one's time together). Bars run from blue (low) to red (high); 100 is the best in the league at that stat: where less is better (goals against, xGA, shot attempts against) a low number earns a high percentile. Rates are per 60 minutes of this unit's own time together.</div>
+    </div>`;
+}
 function playerCardHtml(playerId, p, teamData) {
   const c = p.card;
   if (!c || !c.m.length) return "";
@@ -987,13 +1014,7 @@ function playerCardHtml(playerId, p, teamData) {
   const head = goalieRow
     ? [["GP", goalieRow.gp], ["Sv%", goalieRow.sv_pct != null ? goalieRow.sv_pct.toFixed(3) : "&ndash;"], ["GSAx", (goalieRow.gsax > 0 ? "+" : "") + goalieRow.gsax], ["SA", goalieRow.shots_faced]]
     : [["GP", s.gp], ["G", s.goals], ["A1", s.a1], ["A2", s.a2], ["P", s.points], ["TOI / GP", toiGp]];
-  const groupsInOrder = [...new Set(c.m.map(m => m[0]))];
-  // blue for a low percentile through a neutral grey in the middle to red for a high one
-  const pctColor = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(72 - 23 * t).toFixed(0)}%)`; };
-  const bars = groupsInOrder.map(g => `<div class="pc-block"><div class="pc-group">${g}</div>` + c.m.filter(m => m[0] === g).map(([, label, text, pct]) =>
-    `<div class="pc-row"><span class="pc-label">${label}</span>
-      <span class="pc-track">${pct === null ? "" : `<i class="pc-fill" style="width:${pct}%;background:${pctColor(pct)}"></i><b class="pc-dot" style="left:${pct}%;background:${pctColor(pct)}">${pct}</b>`}</span>
-      <span class="pc-val">${text}</span></div>`).join("") + "</div>").join("");
+  const bars = pctBarsHtml(c);
   return `<div class="player-card">
       <div class="pc-head">
         ${avatarSpan(playerId, p.name, "avatar-lg")}

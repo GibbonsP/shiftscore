@@ -263,6 +263,7 @@ def _compact_unit(u, home_by_game):
     # log rows as arrays (not dicts) — tens of thousands of rows, key names would roughly double the size
     return {
         "key": u["key"], "type": u["type"], "players": u["players"], "summary": u["summary"],
+        **({"card": u["card"]} if u.get("card") else {}),
         "log": [
             [g["date"], g["opp"], g["loc"], g["result"], g["toi_sec"], g["cf"], g["ca"], g["gf"], g["ga"],
              g["xgf"], g["xga"], g["hdcf"], g["hdca"], g["score"], g["game_id"], home_by_game[g["game_id"]],
@@ -786,6 +787,62 @@ def attach_player_cards(team_data: dict) -> None:
                              "small": summ[pid]["toi"] < 0.1 * max_toi}
 
 
+# Unit-card metrics, per kind of unit: (group, label, value(summary), higher is better, decimals, suffix). Rates are per 60 minutes of the
+# unit's own time together; a unit is placed among the units of its own kind that season (lines among lines, pairs among pairs...).
+def _urate(key):
+    return lambda s: s[key] * 3600 / s["toi_sec"] if s["toi_sec"] else None
+
+
+_EV_UNIT_CARD = [
+    ("Overall", "Unit Score / 60", lambda s: s["score_per60"], True, 2, ""),
+    ("Chances", "xGF / 60", _urate("xgf"), True, 2, ""),
+    ("Chances", "xGA / 60", _urate("xga"), False, 2, ""),
+    ("Chances", "xGF%", lambda s: _share(s["xgf"], s["xga"]), True, 1, "%"),
+    ("Chances", "HDCF%", lambda s: _share(s["hdcf"], s["hdca"]), True, 1, "%"),
+    ("Shots", "CF / 60", _urate("cf"), True, 1, ""),
+    ("Shots", "CA / 60", _urate("ca"), False, 1, ""),
+    ("Shots", "CF%", lambda s: _share(s["cf"], s["ca"]), True, 1, "%"),
+    ("Goals", "GF / 60", _urate("gf"), True, 2, ""),
+    ("Goals", "GA / 60", _urate("ga"), False, 2, ""),
+    ("Goals", "GF%", lambda s: _share(s["gf"], s["ga"]), True, 1, "%"),
+]
+UNIT_CARD = {
+    "line": ("forward lines", _EV_UNIT_CARD),
+    "pair": ("defense pairs", _EV_UNIT_CARD),
+    "pp": ("power-play units", [
+        ("Overall", "Unit Score / 60", lambda s: s["score_per60"], True, 2, ""),
+        ("Offense", "xGF / 60", _urate("xgf"), True, 2, ""), ("Offense", "GF / 60", _urate("gf"), True, 2, ""),
+        ("Offense", "CF / 60", _urate("cf"), True, 1, ""), ("Offense", "HDCF / 60", _urate("hdcf"), True, 2, ""),
+    ]),
+    "pk": ("penalty-kill units", [
+        ("Overall", "Unit Score / 60", lambda s: s["score_per60"], True, 2, ""),
+        ("Defense", "xGA / 60", _urate("xga"), False, 2, ""), ("Defense", "GA / 60", _urate("ga"), False, 2, ""),
+        ("Defense", "CA / 60", _urate("ca"), False, 1, ""), ("Defense", "HDCA / 60", _urate("hdca"), False, 2, ""),
+    ]),
+}
+
+
+def attach_unit_cards(units: list[dict]) -> None:
+    """Percentile-bar card for every unit with a real sample (the ones that ride along in a team's file), against the units of its own kind
+    that season with at least 10% of the busiest one's time together. Anyone below that bar is still placed, and the card says it is small."""
+    for utype, (label, spec) in UNIT_CARD.items():
+        mine = [u for u in units if u["type"] == utype and u["summary"]["toi_sec"] > 0]
+        if not mine:
+            continue
+        top = max(u["summary"]["toi_sec"] for u in mine)
+        pool_units = [u for u in mine if u["summary"]["toi_sec"] >= 0.1 * top]
+        pools = [[v for u in pool_units if (v := fn(u["summary"])) is not None] for (_, _, fn, _, _, _) in spec]
+        for u in mine:
+            if u["summary"]["toi_sec"] < MIN_TOI_SEC.get(utype, 10**9):
+                continue    # the short-lived combinations get no card (thousands of them)
+            m = []
+            for (group, name, fn, hi, d, suffix), pool in zip(spec, pools):
+                v = fn(u["summary"])
+                if v is not None:
+                    m.append([group, name, f"{v:.{d}f}{suffix}", _percentile(v, pool, hi)])
+            u["card"] = {"pool": label, "n": len(pool_units), "m": m, "small": u["summary"]["toi_sec"] < 0.1 * top}
+
+
 def special_teams_opportunities(conn) -> dict[str, list[int]]:
     """{team abbrev: [power plays, times shorthanded]}, counted from the game state, used when the NHL's official
     numbers don't cover the same games. A power play starts when a team's skater advantage appears or grows (a second
@@ -879,6 +936,7 @@ def league_units(units: list[dict], max_team_gp: int) -> dict:
 def build_season(conn, pipeline) -> dict:
     """Everything the page needs for one (sliced) season."""
     units = build_units(conn, 1)  # every unit gets a page
+    attach_unit_cards(units)
     unit_keys = {u["key"] for u in units}
     board = leaderboards(conn, unit_keys, units)
     team_data, teams_index, players_index, unit_data = team_shards(conn, units)
