@@ -1274,17 +1274,19 @@ const GameView = (() => {
         const perfHtml = perf.length >= 2 ? `<div class="detail-h3">Top performers</div><div class="two-up"><div><div class="board-sub">Best skaters</div>${perfList(perf.slice(0, nPerf))}</div>
             <div><div class="board-sub">Worst skaters</div>${perfList(perf.slice(-nPerf).reverse())}</div></div>
             <div class="panel-caption">Ranked by Adjusted Game Score (Game Score plus credit for the competition faced, minus the average for his position)${perf.some(p => p.est) ? "; * is estimated from the events so far, since the full score isn't ready" : ""}.</div>` : "";
-        // --- best and worst lines and pairs for each team (at least 3:00 together)
+        // --- best and worst lines and pairs for each team (at least 3:00 together; 1:30 while the game is on, since the lines have
+        // only had a few minutes each early on)
+        const unitMinToi = g.live && (g.live.state === "LIVE" || g.live.state === "CRIT") ? 90 : 180, unitMinText = unitMinToi === 90 ? "1:30" : "3:00";
         const teamUnits = (team) => {
           const rows = [];
           [["line", "Forward line"], ["pair", "Defense pair"]].forEach(([type, label]) => {
-            const us = g.units.filter(u => u[0] === team && u[1] === type && u[2] >= 180).sort((a, b) => b[12] - a[12]);
+            const us = g.units.filter(u => u[0] === team && u[1] === type && u[2] >= unitMinToi).sort((a, b) => b[12] - a[12]);
             if (!us.length) return;
             const pick = us.length === 1 ? [["only one", us[0]]] : [["best", us[0]], ["worst", us[us.length - 1]]];
             pick.forEach(([tag, u]) => rows.push([`${label} <span class="detail-sub">${tag}</span>`, unitText(u), toiStr(u[2]), `${u[6]}&ndash;${u[7]}`, `${u[8].toFixed(2)}&ndash;${u[9].toFixed(2)}`, scoreCell(u[12]), unitGradeHtml(u[12], unitSlotInGame(g, u))]));
           });
           return rows.length ? statTable([{ label: "" }, { label: "Unit" }, { label: "TOI", num: true }, { label: "GF&ndash;GA", num: true }, { label: "xGF&ndash;xGA", num: true }, { label: "Unit Score", num: true }, { label: "Grade" }], rows)
-            : '<div class="empty">No line or pair had 3:00 together.</div>';
+            : `<div class="empty">No line or pair had ${unitMinText} together.</div>`;
         };
         const unitsHtml = `<div class="two-up gv-units">${[g.away, g.home].map(team => `<div><div class="board-sub">${links.team(team)}</div>${teamUnits(team)}</div>`).join("")}</div>`;
         // --- special teams: good night or bad night, whatever the score says, for each team's power play and penalty kill
@@ -1339,7 +1341,7 @@ const GameView = (() => {
             <div class="panel-caption">Graded by goals saved above expected over the whole game: Great is more than +1.5, Quality +0.5 to +1.5, Average within 0.5, Bad -0.5 to -1.5, Blown worse than -1.5. A Stolen win is a Great or Quality game in a win when his team was out-chanced by a goal or more in expected goals; Bailed out is a Bad or Blown game in a win. Relief means another goalie on his team faced more shots.</div>` : "";
         })();
         return { verdict: verdictHtml, danger: dangerHtml, perf: perfHtml, st: stCompact, goalies: goaliesHtml,
-          units: unitsHtml ? `<div class="detail-h3">Best and worst lines and pairs</div>${unitsHtml}<div class="panel-caption">Units with at least 3:00 together, ranked by Unit Score. xGF&ndash;xGA shows how the chances went even where the score didn't. Every line and pair is under Lines &amp; special teams.</div>` : "",
+          units: unitsHtml ? `<div class="detail-h3">Best and worst lines and pairs</div>${unitsHtml}<div class="panel-caption">Units with at least ${unitMinText} together${unitMinToi === 90 ? " (3:00 once the game is over)" : ""}, ranked by Unit Score. xGF&ndash;xGA shows how the chances went even where the score didn't. Every line and pair is under Lines &amp; special teams.</div>` : "",
           share: cardSection,
           stDetail: stHtml ? `<div class="detail-h3">Special teams nights, unit by unit</div>${stHtml}<div class="panel-caption">Judged on the chances, not the score. "Typical" is the expected goals the league's average power play (8.1 per 60 minutes) makes from the same time. A power play that creates more than that, or a penalty kill that allows less, had a good night, even if nothing went in. Needs a minute of ice time to judge.</div>` : "" };
       })();
