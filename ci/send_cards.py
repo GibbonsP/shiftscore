@@ -100,7 +100,7 @@ def build_email(sub: dict, games: list[dict], site: str, image_base: str, postal
     esc = html.escape
     followed = [t for t in sub["teams"] if any(t in (g["away"], g["home"]) for g in games)]
     matchups = [f"{g['away']} at {g['home']}" for g in games]  # no score in the subject: it would spoil the game
-    subject = matchups[0] + (f" and {len(games) - 1} more" if len(games) > 1 else "") + ": your Shift Score cards"
+    subject = matchups[0] + (f" and {len(games) - 1} more" if len(games) > 1 else "") + ": Your Shift Score cards"
     blocks, text = [], ["Your Shift Score cards", ""]
     for g in games:
         page = f"{site}/#game/{g['id']}/{g['home']}"
