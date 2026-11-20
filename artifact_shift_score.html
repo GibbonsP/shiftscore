@@ -1056,6 +1056,8 @@ table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
 .vs-small td { opacity: 0.5; }
 .vs-bar { display: inline-block; vertical-align: middle; width: 70px; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 10%, transparent); margin-right: 6px; overflow: hidden; } .vs-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 .vs-sentence { font-size: 15px; color: var(--ink); margin-bottom: 8px; }
+/* percentile bars below the comparison group's bar: washed out, numbers still readable */
+.pc-faded .pc-fill { opacity: 1; } .pc-faded .pc-dot { color: var(--muted); border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); }
 /* game preview */
 .pred-bar { display: flex; height: 38px; border-radius: 10px; overflow: hidden; font-weight: 800; color: #fff; }
 .pred-bar span { display: flex; align-items: center; padding: 0 12px; white-space: nowrap; overflow: hidden; }

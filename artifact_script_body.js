@@ -1144,8 +1144,10 @@ const POS_LABEL = { L: "LW", C: "C", R: "RW", D: "D", G: "G" };
 // the percentile bars of a card (players and units): blue for a low percentile through a neutral grey in the middle to red for a high one
 function pctBarsHtml(c) {
   const groupsInOrder = [...new Set(c.m.map(m => m[0]))];
-  const pctColor = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(72 - 23 * t).toFixed(0)}%)`; };
-  return groupsInOrder.map(g => `<div class="pc-block"><div class="pc-group">${g}</div>` + c.m.filter(m => m[0] === g).map(([, label, text, pct]) =>
+  // below the comparison group's bar (c.small) the bars are faded, as on Baseball Savant: the percentile is still there, but washed out so it reads as provisional
+  const a = c.small ? " / 0.38" : "";
+  const pctColor = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(72 - 23 * t).toFixed(0)}%${a})`; };
+  return groupsInOrder.map(g => `<div class="pc-block${c.small ? " pc-faded" : ""}"><div class="pc-group">${g}</div>` + c.m.filter(m => m[0] === g).map(([, label, text, pct]) =>
     `<div class="pc-row"><span class="pc-label">${label}</span>
       <span class="pc-track">${pct === null ? "" : `<i class="pc-fill" style="width:${pct}%;background:${pctColor(pct)}"></i><b class="pc-dot" style="left:${pct}%;background:${pctColor(pct)}">${pct}</b>`}</span>
       <span class="pc-val">${text}</span></div>`).join("") + "</div>").join("");

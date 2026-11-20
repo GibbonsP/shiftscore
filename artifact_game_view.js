@@ -763,7 +763,8 @@ const GameView = (() => {
   // [[group, [[label, text, pct]]]], small, caption }. logo and photo are data URIs or null.
   function pctCardSvg(o) {
     const font = CARD_FONT, esc = escapeHtml;
-    const color = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(66 - 18 * t).toFixed(0)}%)`; };
+    // faded when the player or unit is below the comparison group's bar (o.small), the way Baseball Savant does it
+    const color = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(66 - 18 * t).toFixed(0)}%${o.small ? " / 0.4" : ""})`; };
     const wrap = (text, n) => { const out = []; let line = ""; String(text).split(" ").forEach(w => { if ((line + " " + w).trim().length > n) { out.push(line); line = w; } else line = (line + " " + w).trim(); }); if (line) out.push(line); return out; };
     const bandH = 250, statsY = bandH + 14, statsH = 96;
     const face = o.photo
