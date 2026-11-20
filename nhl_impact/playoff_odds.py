@@ -88,6 +88,44 @@ _FACT = np.array([float(np.prod(np.arange(1, i + 1))) if i else 1.0 for i in ran
 def _fact(k): return _FACT[k]
 
 
+def _best_of_seven(p_games: list[float]) -> float:
+    """Chance the first team wins a best-of-seven, given its chance in each of the seven games (played in order, stopping at four wins)."""
+    states = {(0, 0): 1.0}                      # (wins, losses) -> probability of being there before this game
+    total = 0.0
+    for p in p_games:
+        nxt = {}
+        for (w, l), pr in states.items():
+            for won, q in ((1, p), (0, 1 - p)):
+                w2, l2 = w + won, l + 1 - won
+                if w2 == 4:
+                    total += pr * q
+                elif l2 < 4:
+                    nxt[(w2, l2)] = nxt.get((w2, l2), 0.0) + pr * q
+        states = nxt
+    return total
+
+
+def _series_matrix(teams, rates, L):
+    """HI[i, j]: the chance team i, with home ice, beats team j in a best-of-seven (home in games 1, 2, 5 and 7). A game is the same model as the
+    regular season with a tie after regulation settled by a coin flip (playoff overtime is sudden death)."""
+    n = len(teams)
+    win_home = np.zeros((n, n))                                   # win_home[i, j]: i beats j in a game at i's rink
+    for i, ti in enumerate(teams):
+        for j, tj in enumerate(teams):
+            if i == j:
+                continue
+            (hf, ha), (af, aa) = rates[ti], rates[tj]
+            pr_h, pr_a, tie = _outcome_probs(HOME * hf * aa / L, af * ha / (HOME * L))
+            win_home[i, j] = pr_h + tie / 2
+    HI = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                h, a = win_home[i, j], 1 - win_home[j, i]
+                HI[i, j] = _best_of_seven([h, h, a, a, h, a, h])
+    return HI
+
+
 def simulate(season: str, prev_season: str | None = None, sims: int = SIMS, seed: int = 20262027) -> dict:
     standings = fetch_standings()
     teams = sorted(standings)
@@ -149,25 +187,57 @@ def simulate(season: str, prev_season: str | None = None, sims: int = SIMS, seed
         row[:, h] += (o == 0) | ((o == 1) & ~so[:, g]); row[:, a] += (o == 3) | ((o == 2) & ~so[:, g])
     key = pts * 1e6 + rw * 1e3 + row + rng.random((sims, n)) * 0.5          # points, regulation wins, regulation-plus-overtime wins, then a coin flip
 
-    made = np.zeros((sims, n), bool); won_div = np.zeros((sims, n), bool); top_conf = np.zeros((sims, n), bool)
+    # ---- who is in, and in which seed. Per conference: the top three in each division, then the two best of the rest (wild cards).
+    made = np.zeros((sims, n), bool)
+    seed_cnt = {k: np.zeros(n) for k in ("div1", "div2", "div3", "wc1", "wc2")}     # how often each team finishes in each spot
+    pres = np.zeros((sims, n), bool); pres[np.arange(sims), np.argmax(key, axis=1)] = True
+    HI = _series_matrix(teams, rates, L)                                            # HI[i, j]: chance team i (with home ice) beats team j in a best of seven
+    rnd = {k: np.zeros(n) for k in ("r2", "r3", "final", "cup")}
+    ar = np.arange(sims)
+    champs = []
     for conf in ("Eastern", "Western"):
-        cidx = [idx[t] for t in teams if standings[t]["conf"] == conf]
+        cidx = np.array([idx[t] for t in teams if standings[t]["conf"] == conf])
+        divs = sorted({standings[t]["div"] for t in teams if standings[t]["conf"] == conf})
         in_top = np.zeros((sims, n), bool)
-        for dv in sorted({standings[t]["div"] for t in teams if standings[t]["conf"] == conf}):
+        top3 = {}
+        for dv in divs:
             didx = np.array([idx[t] for t in teams if standings[t]["div"] == dv])
             order = np.argsort(-key[:, didx], axis=1)
-            top3 = didx[order[:, :3]]
+            top3[dv] = didx[order[:, :3]]
             for k in range(3):
-                in_top[np.arange(sims), top3[:, k]] = True
-            won_div[np.arange(sims), top3[:, 0]] = True
-        rest = np.array(cidx)
-        wk = np.where(in_top[:, rest], -1.0, key[:, rest])                  # the wild cards: the next best two in the conference
-        wc = rest[np.argsort(-wk, axis=1)[:, :2]]
+                in_top[ar, top3[dv][:, k]] = True
+                np.add.at(seed_cnt[f"div{k + 1}"], top3[dv][:, k], 1)
+        wk = np.where(in_top[:, cidx], -1.0, key[:, cidx])                          # the wild cards: the next best two in the conference
+        wc = cidx[np.argsort(-wk, axis=1)[:, :2]]
         made |= in_top
         for k in range(2):
-            made[np.arange(sims), wc[:, k]] = True
-        ck = key[:, rest]; top_conf[np.arange(sims), rest[np.argmax(ck, axis=1)]] = True
-    pres = np.zeros((sims, n), bool); pres[np.arange(sims), np.argmax(key, axis=1)] = True
+            made[ar, wc[:, k]] = True
+            np.add.at(seed_cnt[f"wc{k + 1}"], wc[:, k], 1)
+
+        def win(a_, b_):
+            """The winner of a best-of-seven between two teams per sim; the one with the better regular season has home ice."""
+            a_better = key[ar, a_] >= key[ar, b_]
+            hi, lo = np.where(a_better, a_, b_), np.where(a_better, b_, a_)
+            return np.where(rng.random(sims) < HI[hi, lo], hi, lo)
+
+        A, B = top3[divs[0]], top3[divs[1]]
+        a_top = key[ar, A[:, 0]] >= key[ar, B[:, 0]]                                 # the division winner with more points plays the second wild card
+        top_dw, other_dw = np.where(a_top, A[:, 0], B[:, 0]), np.where(a_top, B[:, 0], A[:, 0])
+        w1, w2 = win(top_dw, wc[:, 1]), win(other_dw, wc[:, 0])
+        w3, w4 = win(A[:, 1], A[:, 2]), win(B[:, 1], B[:, 2])
+        for w in (w1, w2, w3, w4):
+            np.add.at(rnd["r2"], w, 1)
+        r2a = win(w1, np.where(a_top, w3, w4)); r2b = win(w2, np.where(a_top, w4, w3))   # a division's bracket stays together until the conference final
+        for w in (r2a, r2b):
+            np.add.at(rnd["r3"], w, 1)
+        champ = win(r2a, r2b)
+        np.add.at(rnd["final"], champ, 1)
+        champs.append(champ)
+    e, w_ = champs
+    a_better = key[ar, e] >= key[ar, w_]
+    hi, lo = np.where(a_better, e, w_), np.where(a_better, w_, e)
+    cup_winner = np.where(rng.random(sims) < HI[hi, lo], hi, lo)
+    np.add.at(rnd["cup"], cup_winner, 1)
 
     # what the remaining schedule asks of each team: the average strength (expected-goal difference per game) of its opponents
     strength = {t: rates[t][0] - rates[t][1] for t in teams}
@@ -179,9 +249,11 @@ def simulate(season: str, prev_season: str | None = None, sims: int = SIMS, seed
         i = idx[t]; s = standings[t]
         out.append({
             "abbrev": t, "conf": s["conf"], "div": s["div"], "gp": s["gp"], "w": s["w"], "l": s["l"], "otl": s["otl"], "pts": s["pts"], "rem": len(sos[t]),
-            "playoffs": round(float(made[:, i].mean()), 4), "division": round(float(won_div[:, i].mean()), 4),
-            "conf_top": round(float(top_conf[:, i].mean()), 4), "pres": round(float(pres[:, i].mean()), 4),
-            "pts_mean": round(float(pts[:, i].mean()), 1), "pts_p10": int(np.percentile(pts[:, i], 10)), "pts_p90": int(np.percentile(pts[:, i], 90)),
+            "playoffs": round(float(made[:, i].mean()), 4), "r2": round(float(rnd["r2"][i] / sims), 4), "r3": round(float(rnd["r3"][i] / sims), 4),
+            "final": round(float(rnd["final"][i] / sims), 4), "cup": round(float(rnd["cup"][i] / sims), 4),
+            "div1": round(float(seed_cnt["div1"][i] / sims), 4), "div2": round(float(seed_cnt["div2"][i] / sims), 4), "div3": round(float(seed_cnt["div3"][i] / sims), 4),
+            "wc1": round(float(seed_cnt["wc1"][i] / sims), 4), "wc2": round(float(seed_cnt["wc2"][i] / sims), 4), "pres": round(float(pres[:, i].mean()), 4),
+            "pts_mean": round(float(pts[:, i].mean()), 1),
             "sos": round(float(np.mean(sos[t])), 3) if sos[t] else None, "sos_pts": round(sos_pts[t], 1), "power": round(strength[t], 3),
         })
     # the points the last wild card needed, by conference (median of the 16th team's... the lowest team in)
@@ -197,5 +269,5 @@ if __name__ == "__main__":
     import sys
     res = simulate(sys.argv[1] if len(sys.argv) > 1 else "20262027", sys.argv[2] if len(sys.argv) > 2 else "20252026")
     for t in sorted(res["teams"], key=lambda x: -x["playoffs"]):
-        print(f"{t['abbrev']} {t['conf'][:1]}-{t['div'][:3]} {t['w']}-{t['l']}-{t['otl']} {t['pts']}pts  playoffs {100 * t['playoffs']:5.1f}%  div {100 * t['division']:5.1f}%  pres {100 * t['pres']:4.1f}%  proj {t['pts_mean']} ({t['pts_p10']}-{t['pts_p90']})  sos {t['sos']} ({t['sos_pts']:+.1f} pts)")
+        print(f"{t['abbrev']} {t['conf'][:1]}-{t['div'][:3]} {t['w']}-{t['l']}-{t['otl']} {t['pts']}pts  playoffs {100 * t['playoffs']:5.1f}%  1st {100 * t['div1']:5.1f}%  cup {100 * t['cup']:4.1f}%  proj {t['pts_mean']}  sos {t['sos']} ({t['sos_pts']:+.1f} pts)")
     print(res["cutoff"], res["games_left"], "games left")

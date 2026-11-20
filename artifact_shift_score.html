@@ -993,10 +993,16 @@ table.auto-sort thead tr:last-child th { cursor: pointer; user-select: none; }
 table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
 .sort-arrow { margin-left: 4px; font-size: 11px; opacity: .85; }
 .pc-actions { margin: 10px 0 2px; }
-/* playoff odds */
+/* playoff odds: plain numbers, one "where they finish" bar per team, no row-by-row shading */
 .odds-table td { vertical-align: middle; }
-.odds-cell { position: relative; min-width: 76px; background: linear-gradient(90deg, rgba(var(--c), 0.34) var(--p), transparent var(--p)); font-weight: 700; }
+.odds-table tbody tr { background: transparent; } .odds-table tbody tr:nth-child(even) td, .odds-table tbody tr:nth-child(odd) td { background: transparent; }
 .odds-table tr[data-open-team] { cursor: pointer; } .odds-table tr[data-open-team]:hover td { background-color: var(--rail); }
+.odds-n { font-weight: 700; font-variant-numeric: tabular-nums; }
+.odds-finish { min-width: 190px; } .of-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--muted) 20%, transparent); }
+.of-bar i, .of-legend i { display: block; height: 100%; }
+.f1 { background: #1c5d8c; } .f2 { background: #4b8fc4; } .f3 { background: #9fc6e4; } .fw { background: #e0a64f; } .fo { background: color-mix(in srgb, var(--muted) 30%, transparent); }
+.of-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 6px 0 10px; font-size: 13px; color: var(--muted); } .of-legend span { display: inline-flex; align-items: center; gap: 7px; } .of-legend i { width: 18px; height: 10px; border-radius: 3px; }
+:root[data-theme="dark"] .f1 { background: #5aa3d6; } :root[data-theme="dark"] .f2 { background: #3f7fae; } :root[data-theme="dark"] .f3 { background: #2c5877; }
 /* results vs. chances */
 .rv-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 6px 0 4px; font-size: 13px; color: var(--muted); } .rv-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .rv-legend i { position: static; display: inline-block; transform: none; }
