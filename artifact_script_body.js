@@ -1334,7 +1334,7 @@ async function fillPlayerSeasons(seasonAtStart) {
 // --- Games (box score rendered by the shared GameView in artifact_game_view.js)
 const gameViewLinks = {
   backHtml: detailNav('<button class="back-btn" data-back="games">&larr; All Games</button>'),
-  onNav: () => syncUrl(),
+  onNav: () => syncUrl(true),   // a game's tab is part of its address, but switching tabs doesn't add a history entry
   player: playerLink,
   playerText: playerTextLink,
   team: teamLink,
@@ -1919,7 +1919,7 @@ async function renderSpecialPanel(tabKey) {
 
   if (tabKey === "home") {
     if (searchEl) searchEl.style.display = "none";
-    renderHome();
+    await renderHome();
     return;
   }
 
@@ -2396,11 +2396,11 @@ document.addEventListener("click", (ev) => {
   }
   const openLive = t.closest("[data-open-live]");
   const liveBack = t.closest("[data-live-back]");
-  if (openLive) { LIVE.selected = Number(openLive.dataset.openLive); renderLive(); return; }
-  if (liveBack) { closeLiveGame(); return; }
+  if (openLive) { LIVE.selected = Number(openLive.dataset.openLive); renderLive(); syncUrl(); return; }
+  if (liveBack) { closeLiveGame(); syncUrl(true); return; }
   const teamSec = t.closest("[data-team-sec]");
   if (teamSec) {      // switch the team page's section and stay where the tab row is
-    specialState.teams.sec = teamSec.dataset.teamSec;
+    specialState.teams.sec = teamSec.dataset.teamSec; replaceNextSync = true;
     const keep = window.scrollY;
     renderSpecialPanel("teams").then(() => window.scrollTo(0, keep));
     return;
@@ -2426,7 +2426,7 @@ document.addEventListener("click", (ev) => {
       document.getElementById("season-select").value = SEASON;
       specialState = freshState();
       activeTab = "games";
-      buildPage();
+      navLock = true; buildPage(); navLock = false;
     }
     Object.assign(specialState.games, { mode: "detail", gameId: openGame.dataset.openGame, home: openGame.dataset.gameHome });
     selectTab("games"); renderSpecialPanel("games");
@@ -2442,7 +2442,7 @@ document.addEventListener("click", (ev) => {
       try { localStorage.setItem("shiftscore-season", SEASON); } catch (e) {}
       document.getElementById("season-select").value = SEASON;
       specialState = freshState();
-      buildPage();
+      navLock = true; buildPage(); navLock = false;
     }
     // a goalie's page lives under Goalies, a skater's under Skaters
     const goalie = (S().goalies || []).some(g => String(g.pid) === String(openPlayer.dataset.openPlayer));
@@ -2749,14 +2749,27 @@ function routeOf() {
     if (st.sec && st.sec !== "overview") q.push("sec=" + st.sec);
   } else if (t === "teams" && st.mode === "unit" && st.unitKey) {
     path = `unit/${st.unitKey}/${st.abbrev}`;
+  } else if (t === "home" && LIVE.selected !== null) {
+    q.push("live=" + LIVE.selected);                       // a live game open on Home is a page of its own for the Back button
   }
   if (DATA.default && SEASON !== DATA.default) q.push("s=" + SEASON);
   return path + (q.length ? "?" + q.join("&") : "");
 }
+// Each page the app pushes onto the browser history carries its position in this visit (i, 0 for the page you landed on) and where it was scrolled to
+// (y), so the Back buttons can tell whether there is an earlier page of the site to return to, and Back puts you back where you were on the page.
+let navIndex = 0, navLock = false, replaceNextSync = false;   // navLock: a page is being rebuilt for a season switch, so its in-between states aren't history entries;   // replaceNextSync: the next address change swaps the current history entry (switching sections or tabs within a page isn't a new page)
 function syncUrl(replace) {
+  if (navLock) return;
+  if (replaceNextSync) { replace = true; replaceNextSync = false; }
   const hash = "#" + routeOf();
   if (location.hash === hash) return;
-  try { (routeReady && !replace ? history.pushState : history.replaceState).call(history, null, "", hash); } catch (e) {}
+  try {
+    if (routeReady && !replace) {
+      history.replaceState({ i: navIndex, y: window.scrollY }, "");      // remember where this page was scrolled to
+      navIndex += 1;
+      history.pushState({ i: navIndex, y: 0 }, "", hash);
+    } else history.replaceState({ i: navIndex, y: 0 }, "", hash);
+  } catch (e) {}
 }
 // read an address into the page's state (before the panels are built, or when the back button is used); returns true if the season changed
 function applyRoute(h) {
@@ -2787,6 +2800,13 @@ function applyRoute(h) {
     const key = HASH_ALIAS[seg[0]] || seg[0];
     if (TABS.some(t => t.key === key)) {
       activeTab = key;
+      if (key === "home" && routeReady) {                     // stepping to or from an open live game (not on first load: the live feed isn't connected yet)
+        const want = Number(q.get("live")) || null;
+        if (LIVE.selected !== want) {
+          LIVE.selected = want;
+          if (!want) { if (LIVE.unsubGame) { LIVE.unsubGame(); LIVE.unsubGame = null; } LIVE.view = null; }
+        }
+      }
       // a bare tab address shows that tab's list
       const st = specialState[key];
       if (st && st.mode && st.mode !== "list" && routeReady) st.mode = "list";
@@ -2794,10 +2814,14 @@ function applyRoute(h) {
   }
   return seasonChanged;
 }
-window.addEventListener("popstate", () => {
-  if (applyRoute(location.hash)) { buildPage(); return; }
+window.addEventListener("popstate", async () => {
+  const st = history.state, y = (st && st.y) || 0;
+  navIndex = st && typeof st.i === "number" ? st.i : 0;
+  const restore = () => { window.scrollTo(0, y); setTimeout(() => { if (Math.abs(window.scrollY - y) > 8) window.scrollTo(0, y); }, 350); };   // twice: some pages fill in after they open
+  if (applyRoute(location.hash)) { buildPage(); restore(); return; }
   selectTab(activeTab);
-  if (specialState[activeTab] && TABS.find(t => t.key === activeTab).special) renderSpecialPanel(activeTab);
+  if (specialState[activeTab] && TABS.find(t => t.key === activeTab).special) await renderSpecialPanel(activeTab);
+  restore();
 });
 // Copy link, and the section chips on player pages
 async function copyText(text) {
@@ -2821,7 +2845,7 @@ document.addEventListener("click", async (ev) => {
   if (ptm) {
     // a traded player: all his teams combined, or one team (the page loads that team's file so its lines and pairs are the ones shown)
     const tab = activeTab === "goalies" ? "goalies" : "skaters", keep = window.scrollY, t = ptm.dataset.playerTm;
-    specialState[tab].tm = t;
+    specialState[tab].tm = t; replaceNextSync = true;
     if (t !== "all") specialState[tab].teamAbbrev = t;
     renderSpecialPanel(tab).then(() => window.scrollTo(0, keep));
     return;
@@ -2829,14 +2853,33 @@ document.addEventListener("click", async (ev) => {
   const ps = ev.target.closest("[data-player-sec]");
   if (ps) {
     const tab = activeTab === "goalies" ? "goalies" : "skaters", keep = window.scrollY;
-    specialState[tab].sec = ps.dataset.playerSec;
+    specialState[tab].sec = ps.dataset.playerSec; replaceNextSync = true;
     renderSpecialPanel(tab).then(() => window.scrollTo(0, keep));
   }
 });
 
+
+// Back buttons on a game, player, team or unit page: when this visit has an earlier page of the site, they step back to it (the same as the browser's
+// Back button, so a player opened from a game returns to the game and Back never loops); otherwise they go to the list they name ("All Skaters").
+const IN_PAGE_BACK = ".back-btn[data-back], .back-btn[data-live-back], .back-btn[data-open-team]";
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest(IN_PAGE_BACK);
+  if (!b || navIndex <= 0 || b.hasAttribute("data-all-units")) return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  history.back();
+}, true);
+function relabelBackButtons() {
+  document.querySelectorAll(IN_PAGE_BACK).forEach(b => {
+    if (b.dataset.orig === undefined) b.dataset.orig = b.innerHTML;
+    const want = navIndex > 0 ? "\u2190 Back" : b.dataset.orig;   // the character itself, not "&larr;": innerHTML hands the entity back as the character, and a mismatch would rewrite the button forever
+    if (b.innerHTML !== want) b.innerHTML = want;
+  });
+}
+try { new MutationObserver(relabelBackButtons).observe(document.getElementById("panels"), { childList: true, subtree: true }); } catch (e) {}
 
 const HASH_ALIAS = { players: "skaters", live: "home" };   // links from before the tabs were reorganized
 applyRoute(location.hash);
 buildPage();
 routeReady = true;
 syncUrl();
+if (!history.state) { try { history.replaceState({ i: 0, y: 0 }, ""); } catch (e) {} }

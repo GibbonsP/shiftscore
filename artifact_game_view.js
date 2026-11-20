@@ -910,7 +910,7 @@ const GameView = (() => {
 
     el.addEventListener("click", async (ev) => {
       const tab = ev.target.closest("button[data-gv-tab]");
-      if (tab) { state.tab = tab.dataset.gvTab; renderBody(); return; }
+      if (tab) { state.tab = tab.dataset.gvTab; renderBody(); if (links.onNav) links.onNav(); return; }
       const tm2 = ev.target.closest("button[data-gv-team]");
       if (tm2) { state.team = tm2.dataset.gvTeam; renderBody(); return; }
       const mub = ev.target.closest("button[data-gv-mu]");
