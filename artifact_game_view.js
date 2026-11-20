@@ -757,6 +757,58 @@ const GameView = (() => {
     } catch (e) { alert("Couldn't make the image in this browser."); }
   }
   // logos for the card as data URIs, when the site has loaded them (the static report has none)
+
+  // ---- a percentile card (a player's or a unit's) as a shareable 1080-wide image: the name, a few headline numbers, and the percentile bars
+  // grouped like the page's card (blue low, grey middle, red high). o = { title, sub, date, logo, photo, stats: [[label, value]], groups:
+  // [[group, [[label, text, pct]]]], small, caption }. logo and photo are data URIs or null.
+  function pctCardSvg(o) {
+    const font = CARD_FONT, esc = escapeHtml;
+    const color = (pct) => { const t = Math.abs(pct - 50) / 50; return `hsl(${pct < 50 ? 215 : 4} ${(8 + 70 * t).toFixed(0)}% ${(66 - 18 * t).toFixed(0)}%)`; };
+    const wrap = (text, n) => { const out = []; let line = ""; String(text).split(" ").forEach(w => { if ((line + " " + w).trim().length > n) { out.push(line); line = w; } else line = (line + " " + w).trim(); }); if (line) out.push(line); return out; };
+    const bandH = 250, statsY = bandH + 14, statsH = 96;
+    const face = o.photo
+      ? `<clipPath id="pcFace"><circle cx="121" cy="157" r="64"/></clipPath><circle cx="121" cy="157" r="68" fill="${CARD.row}"/><image href="${o.photo}" x="57" y="93" width="128" height="128" preserveAspectRatio="xMidYMin slice" clip-path="url(#pcFace)"/>`
+      : (o.logo ? `<image href="${o.logo}" x="56" y="92" width="130" height="130" preserveAspectRatio="xMidYMid meet"/>` : "");
+    const miniLogo = o.photo && o.logo ? `<image href="${o.logo}" x="160" y="170" width="54" height="54" preserveAspectRatio="xMidYMid meet"/>` : "";
+    const stats = (o.stats || []).slice(0, 6), sw = 968 / Math.max(1, stats.length);
+    const statBoxes = stats.map(([k, v], i) => `<text x="${56 + sw * i + sw / 2}" y="${statsY + 52}" text-anchor="middle" font-size="40" font-weight="800" fill="${CARD.ink}" ${font}>${esc(v)}</text>
+      <text x="${56 + sw * i + sw / 2}" y="${statsY + 80}" text-anchor="middle" font-size="18" letter-spacing="1.5" fill="${CARD.muted}" ${font}>${esc(k)}</text>`).join("");
+    let y = statsY + statsH + 26;
+    const rowH = 46, trackX = 400, trackW = 440;
+    let bars = "";
+    (o.groups || []).forEach(([group, rows]) => {
+      bars += `<text x="56" y="${y + 24}" font-size="22" font-weight="800" letter-spacing="3" fill="${CARD.accent}" ${font}>${esc(String(group).toUpperCase())}</text>`;
+      y += 40;
+      rows.forEach(([label, text, pct], i) => {
+        if (i % 2 === 0) bars += `<rect x="40" y="${y - 2}" width="1000" height="${rowH}" rx="8" fill="${CARD.row}"/>`;
+        bars += `<text x="56" y="${y + 31}" font-size="23" fill="${CARD.ink}" ${font}>${esc(label)}</text>
+          <rect x="${trackX}" y="${y + 17}" width="${trackW}" height="10" rx="5" fill="${CARD.band}"/>`;
+        if (pct !== null && pct !== undefined) {
+          const c = color(pct), x = trackX + trackW * pct / 100;
+          bars += `<rect x="${trackX}" y="${y + 17}" width="${(trackW * pct / 100).toFixed(1)}" height="10" rx="5" fill="${c}"/>
+            <circle cx="${x.toFixed(1)}" cy="${y + 22}" r="19" fill="${c}"/><text x="${x.toFixed(1)}" y="${y + 29}" text-anchor="middle" font-size="19" font-weight="800" fill="#0b1c2c" ${font}>${pct}</text>`;
+        }
+        bars += `<text x="1024" y="${y + 31}" text-anchor="end" font-size="23" font-weight="700" fill="${CARD.ink}" ${font}>${esc(text)}</text>`;
+        y += rowH;
+      });
+      y += 14;
+    });
+    const notes = (o.small ? ["Small sample: below the ice-time bar for the comparison group, so these can swing a lot."] : []).concat(wrap(o.caption || "", 104), ["Source: NHL play-by-play and shift data."]);
+    const H = y + 16 + 22 * notes.length + 22;
+    const noteSvg = notes.map((t, i) => `<text x="56" y="${y + 24 + 22 * i}" font-size="17" fill="${CARD.muted}" ${font}>${esc(t)}</text>`).join("");
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 ${H}" width="1080" height="${H}">
+      <rect width="1080" height="${H}" fill="${CARD.bg}"/>
+      <rect width="1080" height="${bandH}" fill="${CARD.band}"/>
+      ${cardMark(48, 14, 56)}<text x="136" y="62" font-size="26" font-weight="800" letter-spacing="4" fill="${CARD.accent}" ${font}>SHIFT SCORE</text>
+      <text x="1032" y="62" text-anchor="end" font-size="24" fill="${CARD.muted}" ${font}>${esc(o.date || "")}</text>
+      ${face}${miniLogo}
+      <text x="${o.photo ? 236 : 210}" y="156" font-size="${String(o.title).length > 22 ? 40 : 48}" font-weight="800" fill="${CARD.ink}" ${font}>${esc(o.title)}</text>
+      <text x="${o.photo ? 236 : 210}" y="204" font-size="26" fill="${CARD.muted}" ${font}>${esc(o.sub || "")}</text>
+      ${statBoxes}${bars}${noteSvg}
+    </svg>`;
+  }
+  const savePctCard = (o, name) => saveCardImage(pctCardSvg(o), name);
+
   async function cardLogos() {
     try {
       if (typeof IMG === "undefined" || typeof svgUri === "undefined") return null;
@@ -1417,6 +1469,8 @@ const GameView = (() => {
   return {
     mount,
     cardLogos,
+    pctCardSvg,
+    savePctCard,
     tileStats,
     nightStars,
     card: (g, key, logos) => { const { kind, side } = parseCardKey(key); return shareSvg(kind, g, side, logos || null); },

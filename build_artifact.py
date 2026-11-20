@@ -31,6 +31,7 @@ parser.add_argument("--seasons", nargs="+", help="rebuild only these seasons and
                     "(what the automatic updater uses; writes artifact_data/changed.json listing the files that changed)")
 args = parser.parse_args()
 PAGE_DATA = "artifact_data/page_data.json"
+LIGHT_KEYS = {"meta", "players_index", "games_index", "teams_index", "goalies"}   # what stays inline in the page (everything else is a board)
 
 
 def assemble(data):
@@ -72,6 +73,10 @@ def file_hash(path):
 for season in all_seasons:
     if args.seasons and season not in args.seasons:
         by_season[season] = prev["by_season"][season]
+        # a season built before the boards moved out of the page keeps them inline until a full rebuild writes its boards.json (the page
+        # reads either); one that has the file keeps only the light indexes in the page
+        if f"data/{season}/boards.json" in prev_manifest.get(season, {}):
+            by_season[season] = {k: v for k, v in by_season[season].items() if k in LIGHT_KEYS}
         season_meta.append(next(m for m in prev["seasons"] if m["id"] == season))
         manifest[season] = prev_manifest[season]
         continue
@@ -79,7 +84,10 @@ for season in all_seasons:
     print(f"exporting {season}...")
     out = site_export.build_season(sconn, pipeline)
     sconn.close()
-    by_season[season] = out["inline"]
+    # the leaderboard boards are most of the season's data and only the Leaderboards tab reads them: they go to their own file, fetched when
+    # that tab opens, so the page itself stays small. The light indexes (players, games, teams, goalies) stay in the page.
+    heavy = {k: v for k, v in out["inline"].items() if k not in LIGHT_KEYS}
+    by_season[season] = {k: v for k, v in out["inline"].items() if k in LIGHT_KEYS}
 
     games_played = out["inline"]["meta"]["games"]
     max_team_gp = max((t["gp"] for t in out["inline"]["teams_index"]), default=0)
@@ -99,6 +107,9 @@ for season in all_seasons:
             with open(path, "w") as f:
                 json.dump(data, f, separators=(",", ":"))
             files[f"data/{season}/{kind}/{key}.json"] = path
+    with open(f"{root}/boards.json", "w") as f:
+        json.dump(heavy, f, separators=(",", ":"))
+    files[f"data/{season}/boards.json"] = f"{root}/boards.json"
     # the Units tab's league-wide tables, fetched when that tab opens
     with open(f"{root}/league_units.json", "w") as f:
         json.dump(out["league_units"], f, separators=(",", ":"))

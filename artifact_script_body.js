@@ -10,6 +10,17 @@ try {
   if (saved && DATA.by_season[saved]) SEASON = saved;
 } catch (e) {}
 const S = () => DATA.by_season[SEASON];
+// The leaderboard boards (best and worst single games, lines, pairs, special teams, season averages...) are most of a season's data and only the
+// Leaderboards tab reads them, so they live in data/{season}/boards.json and are fetched when that tab opens (a season built before that change
+// still carries them inline, and needs no fetch).
+const boardsLoading = {};
+async function ensureBoards(season) {
+  const by = DATA.by_season[season || SEASON];
+  if (!by || by.lines !== undefined || by.boards_loaded) return;
+  const id = season || SEASON;
+  boardsLoading[id] = boardsLoading[id] || fetchJson(`data/${id}/boards.json`).then(b => { Object.assign(by, b); by.boards_loaded = true; }, () => { delete boardsLoading[id]; });
+  await boardsLoading[id];
+}
 
 const TABS = [
   {
@@ -461,8 +472,8 @@ function unitSummaryRows(sorted, abbrev) {
 const UNIT_CARRY = {   // share of the team's time for that kind of unit, an absolute floor in seconds, and a cap on how many show
   line: { share: 0.03, floor: 180, top: 10 },
   pair: { share: 0.03, floor: 180, top: 10 },
-  pp: { share: 0.05, floor: 60, top: 12 },
-  pk: { share: 0.05, floor: 60, top: 12 },
+  pp: { share: 0.015, floor: 60, top: 15 },
+  pk: { share: 0.015, floor: 60, top: 15 },
   ev4: { share: 0.05, floor: 60, top: 6 },
   ev3: { share: 0.05, floor: 60, top: 6 },
 };
@@ -479,7 +490,7 @@ function unitSectionsHtml(units, abbrev, more, everything, types) {
     if (everything) return `<div class="detail-h3">${UNIT_LABELS[t]} (${all.length})</div>${unitSummaryTable(all, abbrev)}`;
     const group = mainUnits(all, t);
     if (!group.length) return "";
-    const note = t === "line" || t === "pair" ? `Top ${UNIT_CARRY[t].top} by ice time` : "Every regular unit, by ice time";
+    const note = t === "line" || t === "pair" || t === "pp" || t === "pk" ? `Top ${UNIT_CARRY[t].top} by time together` : "Every regular unit, by ice time";
     return `<div class="detail-h3">${UNIT_LABELS[t]} <span class="detail-sub">${note}</span></div>${unitSummaryRows(group, abbrev)}`;
   }).join("") + moreBtn;
 }
@@ -986,12 +997,38 @@ function pctBarsHtml(c) {
       <span class="pc-track">${pct === null ? "" : `<i class="pc-fill" style="width:${pct}%;background:${pctColor(pct)}"></i><b class="pc-dot" style="left:${pct}%;background:${pctColor(pct)}">${pct}</b>`}</span>
       <span class="pc-val">${text}</span></div>`).join("") + "</div>").join("");
 }
+// the card on screen, so its Save button can draw the same numbers as an image
+let lastPctCard = null;
+const slugOf = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+async function playerPhotoUri(pid) {
+  try {
+    IMG.photoTeam = IMG.photoTeam || jsonOrEmpty("data/photo_team.json");
+    const t = (await IMG.photoTeam)[pid];
+    if (!t) return null;
+    IMG.photoFiles[t] = IMG.photoFiles[t] || jsonOrEmpty("data/photos/" + t + ".json");
+    const b64 = ((await IMG.photoFiles[t]) || {})[pid];
+    return b64 ? "data:image/jpeg;base64," + b64 : null;
+  } catch (e) { return null; }
+}
+async function savePctCard() {
+  const c = lastPctCard;
+  if (!c) return;
+  const logos = await GameView.cardLogos().catch(() => null), season = (DATA.seasons.find(x => x.id === SEASON) || {}).label || "";
+  const groups = [...new Set(c.card.m.map(m => m[0]))].map(g => [g, c.card.m.filter(m => m[0] === g).map(m => [m[1], m[2], m[3]])]);
+  const how = c.kind === "unit"
+    ? `Percentile among the ${c.card.n} ${c.card.pool} with a real sample in ${season} (at least 10% of the busiest one's time together). Blue is low, red is high; 100 is the best in the league, and where less is better a low number earns a high percentile. Rates are per 60 minutes together.`
+    : `Percentile among the ${c.card.n} ${c.card.pool} with a real sample in ${season} (at least 10% of the busiest skater's ice time, or a quarter of the busiest goalie's games). Blue is low, red is high; 100 is the best in the league, and where less is better a low number earns a high percentile. Rates are per 60 minutes, all situations.`;
+  const opts = { title: c.title, sub: c.sub, date: season, logo: logos && logos[c.team] || null, photo: c.kind === "player" ? await playerPhotoUri(c.playerId) : null,
+    stats: c.stats, groups, small: c.card.small, caption: how };
+  await GameView.savePctCard(opts, `shift-score-${slugOf(c.title)}-${slugOf(season)}.png`);
+}
 // a unit's card: where its numbers rank among the units of its own kind this season
 function unitCardHtml(u, data, title) {
   const c = u.card;
   if (!c || !c.m.length) return "";
   const s = u.summary;
   const head = [["GP", s.gp], ["TOI", toiStr(s.toi_sec)], ["GF-GA", `${s.gf}-${s.ga}`], ["xGF-xGA", `${s.xgf.toFixed(1)}-${s.xga.toFixed(1)}`]];
+  lastPctCard = { kind: "unit", card: c, title, sub: `${data.abbrev} · ${UNIT_LABEL_SINGULAR[u.type]}`, team: data.abbrev, stats: head };
   return `<div class="player-card unit-card">
       <div class="pc-head">
         <span class="faces">${u.players.map(p => avatarSpan(p.id, p.name)).join("")}</span>
@@ -1001,6 +1038,7 @@ function unitCardHtml(u, data, title) {
       </div>
       ${c.small ? `<div class="pc-small">Small sample: this unit is below the ice-time bar for the comparison group, so the rates and percentiles below can swing a lot from a few shifts.</div>` : ""}
       <div class="pc-bars">${pctBarsHtml(c)}</div>
+      <div class="pc-actions"><button type="button" class="chip" data-save-pcard="1">Save as image</button></div>
       <div class="panel-caption">Percentile among the ${c.n} ${c.pool} with a real sample this season (at least 10% of the busiest one's time together). Bars run from blue (low) to red (high); 100 is the best in the league at that stat: where less is better (goals against, xGA, shot attempts against) a low number earns a high percentile. Rates are per 60 minutes of this unit's own time together.</div>
     </div>`;
 }
@@ -1015,6 +1053,7 @@ function playerCardHtml(playerId, p, teamData) {
     ? [["GP", goalieRow.gp], ["Sv%", goalieRow.sv_pct != null ? goalieRow.sv_pct.toFixed(3) : "&ndash;"], ["GSAx", (goalieRow.gsax > 0 ? "+" : "") + goalieRow.gsax], ["SA", goalieRow.shots_faced]]
     : [["GP", s.gp], ["G", s.goals], ["A1", s.a1], ["A2", s.a2], ["P", s.points], ["TOI / GP", toiGp]];
   const bars = pctBarsHtml(c);
+  lastPctCard = { kind: "player", card: c, playerId, title: p.name, sub: `${abbrev}${pos ? " · " + pos : ""}`, team: abbrev, stats: head.map(([k, v]) => [k, String(v).replace(/&ndash;/g, "-")]) };
   return `<div class="player-card">
       <div class="pc-head">
         ${avatarSpan(playerId, p.name, "avatar-lg")}
@@ -1024,6 +1063,7 @@ function playerCardHtml(playerId, p, teamData) {
       </div>
       ${c.small ? `<div class="pc-small">Small sample: this player is below the ice-time bar for the comparison group, so the rates and percentiles below can swing a lot from a few games.</div>` : ""}
       <div class="pc-bars">${bars}</div>
+      <div class="pc-actions"><button type="button" class="chip" data-save-pcard="1">Save as image</button></div>
       <div class="panel-caption">Percentile among the ${c.n} ${c.pool} with a real sample this season (at least 10% of the busiest skater's ice time, or a quarter of the busiest goalie's games). Bars run from blue (low) to red (high); 100 is the best in the league at that stat: where less is better (goals against, xGA, giveaways, penalties taken) a low number earns a high percentile. Rates are per 60 minutes of his own ice time, all situations.</div>
     </div>`;
 }
@@ -1892,6 +1932,11 @@ async function renderSpecialPanel(tabKey) {
 
   if (tabKey === "leaderboards") {
     if (searchEl) searchEl.style.display = "none";
+    if (S().lines === undefined && !S().boards_loaded) {
+      host.innerHTML = '<div class="loading">Loading&hellip;</div>';
+      await ensureBoards();
+      if (seasonAtStart !== SEASON) return;
+    }
     host.innerHTML = leaderboardsHtml(state);
     hydrateImages();
     return;
@@ -2490,7 +2535,7 @@ function buildPage() {
         specialState[tab.key].filter = search.value;
         if (specialState[tab.key].mode === "list") renderSpecialPanel(tab.key);
       });
-      if (tab.key !== "home" || activeTab === "home") renderSpecialPanel(tab.key);   // the nightly cards load only when Home is the page you land on or open
+      if ((tab.key !== "home" && tab.key !== "leaderboards") || activeTab === tab.key) renderSpecialPanel(tab.key);   // the nightly cards and the leaderboard boards load only when that tab is the page you land on or open
     } else {
       const host = panel.querySelector(".table-host");
       host.innerHTML = renderTable(tab, "");
@@ -2511,6 +2556,7 @@ function selectTab(key) {
     document.getElementById("panel-" + t.key).classList.toggle("active", t.key === key);
   });
   if (key === "home" && !document.querySelector("#panel-home .home-tile")) renderHome();
+  if (key === "leaderboards" && !document.querySelector("#panel-leaderboards .lb-part")) renderSpecialPanel("leaderboards");
   renderTicker();
   try { localStorage.setItem("shiftscore-tab", key); } catch (e) {}
   syncUrl();
@@ -2770,6 +2816,7 @@ document.addEventListener("click", async (ev) => {
     setTimeout(() => { cl.textContent = "Copy link"; }, 2000);
     return;
   }
+  if (ev.target.closest("[data-save-pcard]")) { savePctCard(); return; }
   const ptm = ev.target.closest("[data-player-tm]");
   if (ptm) {
     // a traded player: all his teams combined, or one team (the page loads that team's file so its lines and pairs are the ones shown)
@@ -2786,6 +2833,70 @@ document.addEventListener("click", async (ev) => {
     renderSpecialPanel(tab).then(() => window.scrollTo(0, keep));
   }
 });
+
+
+// --- Search (the box in the header): players from every season's index (the newest season a player appears in), and teams. Type a name and pick a
+// result, or press / anywhere to jump to the box; arrows and Enter work too. Results are ordinary links, so the page's own click handling opens them.
+let searchIndex = null;
+const foldText = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+function buildSearchIndex() {
+  const players = new Map();
+  [...DATA.seasons].reverse().forEach(sx => {
+    const by = DATA.by_season[sx.id] || {};
+    (by.players_index || []).forEach(p => { if (!players.has(String(p.id))) players.set(String(p.id), { id: p.id, name: p.name, team: p.team, pos: p.pos, gp: p.gp, season: sx.id, label: sx.label }); });
+    (by.goalies || []).forEach(g => { if (!players.has(String(g.pid))) players.set(String(g.pid), { id: g.pid, name: g.goalie, team: g.team, pos: "G", gp: g.gp, season: sx.id, label: sx.label }); });
+  });
+  const teams = Object.keys(TEAM_NAMES).map(a => ({ abbrev: a, name: TEAM_NAMES[a] }));
+  searchIndex = { players: [...players.values()].map(p => Object.assign(p, { f: foldText(p.name), words: foldText(p.name).split(/\s+/) })),
+    teams: teams.map(t => Object.assign(t, { f: foldText(t.name + " " + t.abbrev), words: foldText(t.name).split(/\s+/).concat(foldText(t.abbrev)) })) };
+}
+function searchFor(q) {
+  if (!searchIndex) buildSearchIndex();
+  const f = foldText(q).trim();
+  if (!f) return { players: [], teams: [] };
+  const rank = (e) => {
+    if (e.words[e.words.length - 1] === f || e.f === f) return 0;
+    if (e.f.startsWith(f)) return 1;
+    if (e.words.some(w => w.startsWith(f))) return 2;
+    return e.f.includes(f) ? 3 : 9;
+  };
+  const cur = SEASON;
+  const players = searchIndex.players.map(e => [rank(e), e]).filter(x => x[0] < 9)
+    .sort((a, b) => a[0] - b[0] || (b[1].season === cur) - (a[1].season === cur) || b[1].gp - a[1].gp).slice(0, 8).map(x => x[1]);
+  const teamHits = searchIndex.teams.map(e => [rank(e), e]).filter(x => x[0] < 9).sort((a, b) => a[0] - b[0]).slice(0, 3);
+  return { players, teams: teamHits.map(x => x[1]), teamsFirst: teamHits.length > 0 && teamHits[0][0] === 0 };   // an exact team name or code (PHI) leads
+}
+function renderSearch(q) {
+  const box = document.getElementById("search-results"), input = document.getElementById("site-search");
+  if (!q.trim()) { box.hidden = true; input.setAttribute("aria-expanded", "false"); return; }
+  const r = searchFor(q);
+  const player = (p) => `<a class="sr-item" role="option" data-open-player="${p.id}" data-player-team="${p.team}" data-player-season="${p.season}">${avatarSpan(p.id, p.name)}<span class="sr-name">${escapeHtml(p.name)}</span>
+    <span class="sr-meta">${logoSpan(p.team)}${p.team}${p.pos ? " &middot; " + p.pos : ""}${p.season !== SEASON ? " &middot; " + p.label : ""}</span></a>`;
+  const team = (t) => `<a class="sr-item" role="option" data-open-team="${t.abbrev}">${logoSpan(t.abbrev)}<span class="sr-name">${escapeHtml(t.name)}</span><span class="sr-meta">${t.abbrev}</span></a>`;
+  const pHtml = r.players.length ? `<div class="sr-h">Players</div>${r.players.map(player).join("")}` : "", tHtml = r.teams.length ? `<div class="sr-h">Teams</div>${r.teams.map(team).join("")}` : "";
+  box.innerHTML = (r.teamsFirst ? tHtml + pHtml : pHtml + tHtml) || '<div class="sr-none">Nothing matches that.</div>';
+  box.hidden = false; input.setAttribute("aria-expanded", "true");
+  const first = box.querySelector(".sr-item"); if (first) first.classList.add("on");
+  hydrateImages();
+}
+(function wireSearch() {
+  const input = document.getElementById("site-search"), box = document.getElementById("search-results");
+  if (!input || !box) return;
+  const close = () => { box.hidden = true; input.setAttribute("aria-expanded", "false"); };
+  input.addEventListener("input", () => renderSearch(input.value));
+  input.addEventListener("focus", () => { if (input.value.trim()) renderSearch(input.value); });
+  input.addEventListener("keydown", (ev) => {
+    const items = [...box.querySelectorAll(".sr-item")], i = items.findIndex(x => x.classList.contains("on"));
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); if (!items.length) return; items.forEach(x => x.classList.remove("on")); const n = (i + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; items[n].classList.add("on"); items[n].scrollIntoView({ block: "nearest" }); }
+    else if (ev.key === "Enter") { ev.preventDefault(); const t = items[i >= 0 ? i : 0]; if (t) t.click(); }
+    else if (ev.key === "Escape") { close(); input.blur(); }
+  });
+  box.addEventListener("click", () => setTimeout(() => { close(); input.value = ""; input.blur(); }, 0));
+  document.addEventListener("click", (ev) => { if (!ev.target.closest(".site-search-wrap")) close(); });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "/" && !ev.metaKey && !ev.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) { ev.preventDefault(); input.focus(); input.select(); }
+  });
+})();
 
 const HASH_ALIAS = { players: "skaters", live: "home" };   // links from before the tabs were reorganized
 applyRoute(location.hash);

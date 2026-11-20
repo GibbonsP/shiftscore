@@ -14,7 +14,7 @@ from collections import defaultdict
 
 from .game_info import game_results
 from .game_pages import build_games
-from .unit_pages import MIN_TOI_SEC, build_units, order_players, player_slots, unit_key
+from .unit_pages import MIN_TOI_SEC as _UNIT_MIN_TOI_SEC, build_units, order_players, player_slots, unit_key
 
 
 def rows(conn, q, params=()):
@@ -22,6 +22,10 @@ def rows(conn, q, params=()):
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
+
+# which units ride along in a team's file (the rest sit in units/{ABBREV}.json, fetched on demand) and get a percentile card: lines and pairs
+# with 10 minutes together, penalty-kill and power-play units with one minute, so a team page can show a long list of its special-teams groups
+MIN_TOI_SEC = {**_UNIT_MIN_TOI_SEC, "pp": 60, "pk": 60}
 
 TEAM_JOIN = """JOIN (SELECT home_team_id AS id, home_team_abbrev AS abbrev FROM games
                       UNION SELECT away_team_id, away_team_abbrev FROM games) t"""
