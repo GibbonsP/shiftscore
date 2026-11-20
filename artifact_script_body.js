@@ -613,10 +613,10 @@ function unitDetailHtml(data, key) {
     <div class="panel-caption">${names}</div>
     <div class="panel-caption">Unit Score counts what this unit earned and allowed over its time together in each game: expected goals and goals, plus shot attempts for lines, pairs and penalty-kill units. It's a running count, so more ice time means a bigger swing &mdash; Score / 60 normalizes for that.</div>
     <div class="detail-h3">Season Summary</div>${summary}
+    ${unitBestWorstHtml(u)}
     <div class="detail-h3">Shot danger</div>${dangerCard}
     <div class="panel-caption">Shots on goal for and against while this unit was on the ice, by how likely each shot was to score, with the goals and expected goals (xG) from them. Under shots for, green means more goals than the shots were worth; under shots against, green means fewer goals allowed than expected. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
     ${unitVsHtml(u)}
-    ${unitBestWorstHtml(u)}
     <div class="detail-h3">Game Log (${s.gp} games)</div>${log}
   `;
 }
