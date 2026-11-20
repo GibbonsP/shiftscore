@@ -235,7 +235,8 @@ header.masthead::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; pointer-events: none;
   background: repeating-linear-gradient(90deg, var(--red) 0 16px, transparent 16px 21px);
 }
-.masthead-row, h1 { font-weight: 900; font-size: clamp(38px, 8vw, 60px); letter-spacing: 0.015em; line-height: 0.95; }
+.masthead-row { position: relative; z-index: 1; }
+h1 { font-weight: 900; font-size: clamp(38px, 8vw, 60px); letter-spacing: 0.015em; line-height: 0.95; }
 h1 span { color: var(--red); }
 .season-tag { font-size: 13.5px; letter-spacing: 0.02em; }
 
@@ -626,9 +627,10 @@ header.masthead {
   background:
     radial-gradient(circle at 88% 12%, rgba(124, 196, 245, 0.38), transparent 42%),
     linear-gradient(135deg, var(--board) 0%, color-mix(in srgb, var(--board) 52%, var(--accent)) 115%);
-  padding-top: calc(26px + env(safe-area-inset-top, 0px));
-  padding-bottom: 50px;   /* the tab bar overlaps the lower edge */
+  padding-top: calc(36px + env(safe-area-inset-top, 0px));
+  padding-bottom: 66px;   /* the tab bar overlaps the lower edge */
 }
+header.masthead h1 { font-size: clamp(44px, 9vw, 76px); }
 header.masthead::after { display: none; }
 header.masthead::before { right: 6%; top: 46%; width: 150px; height: 150px; opacity: 0.22; border-width: 2px; }
 .masthead-row { align-items: center; gap: 14px 24px; }
@@ -657,7 +659,7 @@ nav.tabs button.has-live::before {
 .panel { padding-top: 30px; }
 
 @media (max-width: 480px) {
-  header.masthead { padding-bottom: 48px; }
+  header.masthead { padding-bottom: 60px; }
   .masthead-tools { flex-direction: row; align-items: center; }
   nav.tabs { margin-left: 4px; margin-right: 4px; max-width: calc(100% - 8px); }
   nav.tabs button { padding: 8px 13px; }
@@ -667,7 +669,7 @@ nav.tabs button.has-live::before {
 /* ================= Readability pass =================
    Type is scaled up from the original (tables 13.5 -> 15px, numbers 15 -> 16px, captions 14 -> 16px) with roomier rows and a
    slightly wider page. A first pass went larger (16/17px); this is the middle. */
-.wrap { max-width: 1160px; }
+.wrap { max-width: 1280px; }
 body { font-size: 16px; line-height: 1.55; }
 .season-tag { font-size: 14px; }
 .season-select { font-size: 14px; padding: 7px 12px; }
