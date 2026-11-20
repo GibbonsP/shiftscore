@@ -508,10 +508,27 @@ function bandShade(g, x) {
   return Math.abs(z) >= 0.75 && Math.abs(d) >= 0.3 ? Math.sign(d) * (0.15 + 0.85 * Math.min(1, (Math.abs(z) - 0.75) / 1.5)) : 0;
 }
 function dangerCardHtml(rows, total) {
-  const head = `<div class="dz-head"><span></span>${[["h", "High", "14%+"], ["m", "Medium", "7&ndash;14%"], ["l", "Low", "under 7%"]].map(([b, n, r]) => `<span class="dz-h ${b}">${n}<small>${r}</small></span>`).join("")}<span class="dz-h t">${total || "Total"}<small>shots on goal</small></span></div>`;
-  const cell = (c, cls) => { const sh = c[2], on = sh !== undefined && sh !== null && Math.abs(sh) > 0.12;
-    return `<span class="dz-c ${cls}${on ? (sh > 0 ? " over" : " under") : ""}"${on ? ` style="--sh:${Math.round(14 + 30 * Math.min(1, Math.abs(sh)))}%"` : ""}><b>${c[0]}</b><small>${c[1] || "&nbsp;"}</small></span>`; };
-  return `<div class="dz-wrap"><div class="dz" style="--dz-n:4">${head}${rows.map(r => `<div class="dz-team"><span class="dz-name">${r.name}</span>${r.cells.map((c, i) => cell(c, ["h", "m", "l", "t"][i])).join("")}</div>`).join("")}</div></div>`;
+  const head = `<div class="dz-head"><span></span>${[["h", "High", "14%+"], ["m", "Medium", "7&ndash;14%"], ["l", "Low", "under 7%"]].map(([b, n, r]) => `<span class="dz-h ${b}"><i class="dz-dot"></i>${n}<small>${r}</small></span>`).join("")}<span class="dz-h t">${total || "Total"}<small>shots on goal</small></span></div>`;
+  // goals against what the shots were worth, written as a small +/- chip ("9 G · 3.48 xG" becomes +5.5)
+  // the chip's color follows the cell's shading (good for the team or bad), not the sign: more goals allowed than expected is a +, but a bad one
+  const gap = (text, sh) => { const m = /(\d+)\s*G\s*(?:&middot;|·)\s*([\d.]+)\s*xG/.exec(text || ""); if (!m) return ""; const d = Number(m[1]) - Number(m[2]);
+    return Math.abs(d) < 0.05 ? "" : `<em class="dz-gap ${sh > 0.12 ? "up" : sh < -0.12 ? "down" : ""}">${d > 0 ? "+" : "&minus;"}${Math.abs(d).toFixed(1)}</em>`; };
+  const cell = (c, cls, bar) => { const sh = c[2], on = sh !== undefined && sh !== null && Math.abs(sh) > 0.12;
+    return `<span class="dz-c ${cls}${on ? (sh > 0 ? " over" : " under") : ""}"${on ? ` style="--sh:${Math.round(14 + 30 * Math.min(1, Math.abs(sh)))}%"` : ""}><b>${c[0]}</b>${bar || ""}<small>${c[1] || "&nbsp;"}${gap(c[1], sh)}</small></span>`; };
+  const body = rows.map(r => {
+    // a thin bar under each count: how big that band is next to the row's biggest, or, on a share row, the share itself with a mark at 50%
+    const nums = r.cells.slice(0, 3).map(c => Number(String(c[0]).replace(/[^0-9.]/g, "")));
+    const isShare = r.cells.slice(0, 3).some(c => /%$/.test(String(c[0])));
+    const max = Math.max(1, ...nums);
+    return `<div class="dz-team"><span class="dz-name">${r.name}</span>${r.cells.map((c, i) => {
+      if (i === 3) return cell(c, "t");
+      const v = nums[i], ok = Number.isFinite(v) && String(c[0]).indexOf("&") !== 0;
+      const bar = !ok ? "" : isShare ? `<i class="dz-bar share"><u style="width:${Math.min(100, v)}%"></u></i>` : `<i class="dz-bar"><u style="width:${(100 * v / max).toFixed(0)}%"></u></i>`;
+      return cell(c, ["h", "m", "l"][i], bar);
+    }).join("")}</div>`;
+  }).join("");
+  const legend = `<div class="dz-legend"><span>Bars: how many shots in each danger band${rows.some(r => r.cells.some(c => /%$/.test(String(c[0])))) ? ", and the share of them (the mark is 50%)" : ""}.</span><span><i class="over"></i>More goals than the shots were worth</span><span><i class="under"></i>Fewer</span></div>`;
+  return `<div class="dz-wrap"><div class="dz" style="--dz-n:4">${head}${body}</div></div>${legend}`;
 }
 function unitDetailHtml(data, key) {
   const u = (data.units || []).find(x => x.key === key);
