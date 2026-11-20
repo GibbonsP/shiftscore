@@ -520,10 +520,10 @@ function dangerCardHtml(rows, total) {
     const nums = r.cells.slice(0, 3).map(c => Number(String(c[0]).replace(/[^0-9.]/g, "")));
     const isShare = r.cells.slice(0, 3).some(c => /%$/.test(String(c[0])));
     const max = Math.max(1, ...nums);
-    return `<div class="dz-team"><span class="dz-name">${r.name}</span>${r.cells.map((c, i) => {
+    return `<div class="dz-team${isShare ? " share" : ""}"><span class="dz-name">${r.name}</span>${r.cells.map((c, i) => {
       if (i === 3) return cell(c, "t");
       const v = nums[i], ok = Number.isFinite(v) && String(c[0]).indexOf("&") !== 0;
-      const bar = !ok ? "" : isShare ? `<i class="dz-bar share"><u style="width:${Math.min(100, v)}%"></u></i>` : `<i class="dz-bar"><u style="width:${(100 * v / max).toFixed(0)}%"></u></i>`;
+      const bar = !ok ? "" : isShare ? `<i class="dz-bar share"><u class="${v >= 50 ? "up" : "down"}" style="width:${Math.min(100, v)}%"></u></i>` : `<i class="dz-bar"><u style="width:${(100 * v / max).toFixed(0)}%"></u></i>`;
       return cell(c, ["h", "m", "l"][i], bar);
     }).join("")}</div>`;
   }).join("");

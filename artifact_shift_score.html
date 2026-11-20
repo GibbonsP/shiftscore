@@ -1023,6 +1023,34 @@ table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
 .dz-gap { font-style: normal; font-weight: 800; font-size: 12px; margin-left: 6px; padding: 0 6px; border-radius: 999px; color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); } .dz-gap.up { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); } .dz-gap.down { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
 .dz-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 8px 4px 2px; font-size: 12.5px; color: var(--muted); align-items: center; }
 .dz-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; } .dz-legend i.over { background: color-mix(in srgb, var(--good) 40%, transparent); } .dz-legend i.under { background: color-mix(in srgb, var(--bad) 40%, transparent); }
+/* shot danger grid: a calmer look. The three bands read as tinted columns; over/under is a colored edge and chip instead of a heavy block of color */
+.dz { padding: 6px 10px 10px; border-radius: 20px; }
+.dz-head { padding: 14px 12px 10px; }
+.dz-team { padding: 8px 12px; }
+.dz-team + .dz-team { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.dz-name { font-size: 19px; letter-spacing: 0.04em; }
+.dz-c { padding: 10px 6px 9px; border-radius: 14px; }
+.dz-c.h { background: color-mix(in srgb, var(--bad) 6%, transparent); } .dz-c.m { background: color-mix(in srgb, var(--accent) 7%, transparent); } .dz-c.l { background: color-mix(in srgb, var(--muted) 9%, transparent); } .dz-c.t { background: transparent; }
+.dz-c.over { background: color-mix(in srgb, var(--good) calc(var(--sh) * 0.5), transparent); box-shadow: inset 4px 0 0 var(--good); }
+.dz-c.under { background: color-mix(in srgb, var(--bad) calc(var(--sh) * 0.5), transparent); box-shadow: inset 4px 0 0 var(--bad); }
+.dz-c.t.over, .dz-c.t.under { border-radius: 14px; }
+.dz-c b { font-size: 26px; line-height: 1.05; }
+.dz-c .dz-bar { height: 7px; border-radius: 4px; margin: 7px 16% 5px; background: color-mix(in srgb, var(--ink) 10%, transparent); }
+.dz-c .dz-bar u { border-radius: 4px; opacity: 0.95; }
+.dz-c .dz-bar.share u.up { background: var(--good); } .dz-c .dz-bar.share u.down { background: var(--bad); }
+.dz-c .dz-bar.share::after { width: 2px; background: var(--ink); opacity: 0.7; top: -2px; bottom: -2px; }
+.dz-c small { font-size: 12.5px; }
+.dz-team.share { margin-top: 4px; border-top: 2px solid var(--line); }
+.dz-team.share .dz-name { color: var(--accent); }
+.dz-team.share .dz-c b { font-size: 30px; }
+.dz-team.share .dz-c .dz-bar { height: 9px; }
+.dz-dot { width: 34px; height: 6px; }
+@media (max-width: 640px) {
+  .dz { --dz-cols: 82px repeat(4, minmax(112px, 1fr)); min-width: 560px; padding-left: 6px; padding-right: 6px; }
+  .dz-name { font-size: 14.5px; letter-spacing: 0.02em; line-height: 1.15; position: sticky; left: 0; z-index: 2; background: var(--surface); padding: 6px 4px 6px 0; }
+  .dz-team { padding-left: 6px; padding-right: 6px; }
+  .dz-sub { font-size: 11.5px; }
+}
 /* game preview */
 .pred-bar { display: flex; height: 38px; border-radius: 10px; overflow: hidden; font-weight: 800; color: #fff; }
 .pred-bar span { display: flex; align-items: center; padding: 0 12px; white-space: nowrap; overflow: hidden; }
