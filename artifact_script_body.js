@@ -507,48 +507,6 @@ function bandShade(g, x) {
   const d = g - x, z = d / Math.sqrt(Math.max(x, 0.5));
   return Math.abs(z) >= 0.75 && Math.abs(d) >= 0.3 ? Math.sign(d) * (0.15 + 0.85 * Math.min(1, (Math.abs(z) - 0.75) / 1.5)) : 0;
 }
-
-// --- Shot danger as pictures: bars you can read at a glance, with the grid of numbers kept underneath ("Show the numbers").
-// Bands: high 14%+ to score, medium 7-14%, low under 7% (the same colors as the shot maps).
-const DZ_BANDS = [["h", "High danger", "14%+"], ["m", "Medium", "7&ndash;14%"], ["l", "Low", "under 7%"]];
-const dzDetails = (table) => `<details class="dz-details"><summary>Show the numbers</summary>${table}</details>`;
-// a butterfly: for each band, the other team's chances (left) against this side's (right), with the share between them; goals, when given, are a
-// diamond on the bar at the number of goals (a diamond past the end of the bar means more goals than the chances were worth)
-function dangerButterflyHtml(title, sub, F, A, opts) {
-  const o = opts || {}, fmt = o.fmt || ((v) => String(Math.round(v)));
-  const all = [...F, ...A, ...(o.gf || []), ...(o.ga || [])], max = Math.max(1e-9, ...all);
-  const w = (v) => Math.min(100, 100 * v / max);
-  const bar = (v, g, band, side) => {
-    const wv = w(v), hasG = g !== undefined && g !== null, far = Math.max(wv, hasG ? w(g) : 0);
-    // the number sits just past the end of the bar (or of the goals diamond, if that reaches further); when that would run off the chart it goes inside, by the middle
-    const inside = far > 76, light = inside && wv > 55;
-    return `<div class="dzc-bar ${side}"><i class="dzc-fill ${band}" style="width:${wv.toFixed(1)}%"></i>
-      ${hasG ? `<i class="dzc-goal" style="${side === "l" ? "right" : "left"}:${w(g).toFixed(1)}%" title="${Math.round(g)} goal${Math.round(g) === 1 ? "" : "s"}"></i>` : ""}
-      <b class="dzc-n${light ? " in" : ""}" style="${side === "l" ? "right" : "left"}:${inside ? "8px" : `calc(${far.toFixed(1)}% + ${hasG ? 14 : 6}px)`}">${fmt(v)}</b></div>`;
-  };
-  const sum = (v) => v.reduce((t, x) => t + x, 0), sh = (x, y) => (x + y ? 100 * x / (x + y) : null);
-  const rows = DZ_BANDS.map(([b, name, range], i) => {
-    const share = sh(F[i], A[i]);
-    return `<div class="dzc-row">${bar(A[i], o.ga && o.ga[i], b, "l")}<div class="dzc-mid ${b}"><b>${name}</b><small>${range}</small></div>${bar(F[i], o.gf && o.gf[i], b, "r")}
-      <span class="dzc-share${share === null ? "" : share >= 55 ? " good" : share <= 45 ? " bad" : ""}">${share === null ? "&ndash;" : Math.round(share) + "%"}</span></div>`;
-  }).join("");
-  const tot = sh(sum(F), sum(A));
-  return `<div class="dzc"><div class="dzc-title"><strong>${title}</strong><span>${sub}</span></div>
-    <div class="dzc-head"><span>&larr; ${o.againstLabel || "Against"}</span><span></span><span>${o.forLabel || "For"} &rarr;</span><span>Share</span></div>${rows}
-    <div class="dzc-total"><span>${fmt(sum(A))}</span><span>Total</span><span>${fmt(sum(F))}</span><span class="dzc-share${tot === null ? "" : tot >= 55 ? " good" : tot <= 45 ? " bad" : ""}">${tot === null ? "&ndash;" : Math.round(tot) + "%"}</span></div></div>`;
-}
-// one side's chances as a single bar split into the three bands (the mix of high, medium and low), with goals and expected goals underneath
-function dangerMixHtml(title, sub, n, g, x, totals) {
-  const tot = n[0] + n[1] + n[2];
-  if (!tot) return "";
-  if (!g) {   // only season totals are known (not goals and xG by band): say them once
-    const seg0 = DZ_BANDS.map(([b, name], i) => n[i] ? `<div class="dzm-seg ${b}" style="flex:${n[i]}" title="${name}: ${n[i]} shots"><b>${n[i]}</b>${100 * n[i] / tot >= 14 ? `<small>${name.split(" ")[0]}</small>` : ""}</div>` : "").join("");
-    return `<div class="dzm"><div class="dzc-title"><strong>${title}</strong><span>${sub}</span></div><div class="dzm-bar">${seg0}</div><div class="dzm-foot"><span>${tot} shots on goal &middot; ${totals.goals} G &middot; ${totals.xg.toFixed(1)} xG</span></div></div>`;
-  }
-  const seg = DZ_BANDS.map(([b, name], i) => n[i] ? `<div class="dzm-seg ${b}" style="flex:${n[i]}" title="${name}: ${n[i]} shots, ${Math.round(g[i])} goals, ${x[i].toFixed(2)} xG"><b>${n[i]}</b>${100 * n[i] / tot >= 14 ? `<small>${name.split(" ")[0]}</small>` : ""}</div>` : "").join("");
-  const foot = DZ_BANDS.map(([b, name], i) => `<span class="${b}"><i></i>${name.split(" ")[0]}: ${Math.round(g[i])} G &middot; ${x[i].toFixed(2)} xG</span>`).join("");
-  return `<div class="dzm"><div class="dzc-title"><strong>${title}</strong><span>${sub}</span></div><div class="dzm-bar">${seg}</div><div class="dzm-foot">${foot}</div></div>`;
-}
 function dangerCardHtml(rows, total) {
   const head = `<div class="dz-head"><span></span>${[["h", "High", "14%+"], ["m", "Medium", "7&ndash;14%"], ["l", "Low", "under 7%"]].map(([b, n, r]) => `<span class="dz-h ${b}">${n}<small>${r}</small></span>`).join("")}<span class="dz-h t">${total || "Total"}<small>shots on goal</small></span></div>`;
   const cell = (c, cls) => { const sh = c[2], on = sh !== undefined && sh !== null && Math.abs(sh) > 0.12;
@@ -576,15 +534,11 @@ function unitDetailHtml(data, key) {
   const uX = [[bx[6], bx[7]], [bx[8], bx[9]], [bx[10], bx[11]]];
   const uCell = (n, g, x, against) => [n, `${Math.round(g)} G &middot; ${x.toFixed(2)} xG`, (against ? -1 : 1) * bandShade(g, x)];
   const uSum = (arr, i) => arr.reduce((t, v) => t + v[i], 0);
-  const dangerCardTable = dangerCardHtml([
+  const dangerCard = dangerCardHtml([
     { name: "Shots for", cells: [...band.map((b, k) => uCell(b[0], uG[k][0], uX[k][0], false)), uCell(sum(0), uSum(uG, 0), uSum(uX, 0), false)] },
     { name: "Shots against", cells: [...band.map((b, k) => uCell(b[1], uG[k][1], uX[k][1], true)), uCell(sum(1), uSum(uG, 1), uSum(uX, 1), true)] },
     { name: "Share", cells: [...band.map(b => shareCell(b[0], b[1])), shareCell(sum(0), sum(1))] },
   ], "Total");
-  const dangerCard = dangerButterflyHtml("Shots on goal", "chances for and against while this unit was on the ice", band.map(b => b[0]), band.map(b => b[1]), { forLabel: "For", againstLabel: "Against" })
-    + dangerButterflyHtml("Expected goals", "what those chances were worth; diamonds are the goals actually scored", uX.map(v => v[0]), uX.map(v => v[1]),
-      { fmt: (v) => v.toFixed(1), gf: uG.map(v => v[0]), ga: uG.map(v => v[1]) })
-    + dzDetails(dangerCardTable);
   const log = statTable(
     [{ label: "Date" }, { label: "Opp" }, { label: "Result" }, ...["TOI", "CF", "CA", "GF", "GA", "xGF", "xGA", "HD", "MD", "LD", "Unit Score"].map(label => ({ label, num: true })), ...(u.type === "line" || u.type === "pair" ? [{ label: "Slot / grade" }] : [])],
     u.log.map(g => { const pair = (f, a) => (f > a ? `<span class="pos">${f}&ndash;${a}</span>` : f < a ? `<span class="neg">${f}&ndash;${a}</span>` : `${f}&ndash;${a}`);
@@ -600,7 +554,7 @@ function unitDetailHtml(data, key) {
     <div class="panel-caption">Unit Score counts what this unit earned and allowed over its time together in each game: expected goals and goals, plus shot attempts for lines, pairs and penalty-kill units. It's a running count, so more ice time means a bigger swing &mdash; Score / 60 normalizes for that.</div>
     <div class="detail-h3">Season Summary</div>${summary}
     <div class="detail-h3">Shot danger</div>${dangerCard}
-    <div class="panel-caption">The first chart sets the shots on goal for and against while this unit was on the ice, by how likely each shot was to score (high 14%+, medium 7-14%, low under 7%); the second shows what those chances were worth in expected goals, with a diamond for the goals actually scored. Share is the unit's part of the chances (green above 55%, red below 45%). "Show the numbers" opens the full grid, with the goals and expected goals (xG) from each band. Under shots for, green means more goals than the shots were worth; under shots against, green means fewer goals allowed than expected. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
+    <div class="panel-caption">Shots on goal for and against while this unit was on the ice, by how likely each shot was to score, with the goals and expected goals (xG) from them. Under shots for, green means more goals than the shots were worth; under shots against, green means fewer goals allowed than expected. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
     <div class="detail-h3">Game Log (${s.gp} games)</div>${log}
   `;
 }
@@ -1075,8 +1029,7 @@ function teamSpecialDangerHtml(data) {
   const row = (name, a, label) => ({ name: `${name}<small class="dz-sub">${toiStr(a[5])} on ice</small>`,
     cells: [[a[0], ""], [a[1], ""], [a[2], ""], [a[0] + a[1] + a[2], `${a[3]} G &middot; ${a[4].toFixed(1)} xG`]] });
   return `<div class="detail-h3">Shot danger on special teams</div>
-    <div class="two-up">${dangerMixHtml("Power play", `${toiStr(sp.pp[5])} on ice &middot; the team's own shots`, sp.pp.slice(0, 3), null, null, { goals: sp.pp[3], xg: sp.pp[4] })}${dangerMixHtml("Penalty kill", `${toiStr(sp.pk[5])} shorthanded &middot; shots it allowed`, sp.pk.slice(0, 3), null, null, { goals: sp.pk[3], xg: sp.pk[4] })}</div>
-    ${dzDetails(dangerCardHtml([row("Power play", sp.pp), row("Penalty kill", sp.pk)], "Total"))}
+    ${dangerCardHtml([row("Power play", sp.pp), row("Penalty kill", sp.pk)], "Total")}
     <div class="panel-caption">Shots on goal by danger band. Power play counts the team's own shots while it had the man advantage; penalty kill counts the shots it allowed while shorthanded. The small figures under each total are goals and expected goals from those shots. Unit by unit is below.</div>`;
 }
 function teamDetailHtml(data) {
@@ -1354,7 +1307,7 @@ function playerDetailHtml(playerId, teamData, sec, tm) {
     const xF = [s.hdxgf || 0, s.mdxgf || 0, s.ldxgf || 0], xA = [s.hdxga || 0, s.mdxga || 0, s.ldxga || 0];
     const onCell = (n, g, x, against) => [n, `${Math.round(g)} G &middot; ${x.toFixed(2)} xG`, (against ? -1 : 1) * shade(g, x)];
     const share = (x, y) => (x + y ? [Math.round(100 * x / (x + y)) + "%", `${x} of ${x + y}`, (x / (x + y) - 0.5) * 4] : ["&ndash;", "", null]);
-    const table = dangerCardHtml([
+    return dangerCardHtml([
       { name: "Own shots", cells: [...[0, 1, 2].map(i => ownCell(ownN[i], ownG[i], ownX[i])), ownCell(tot[0], tot[1], tot[2])] },
       // on the ice: the chances for and against by band with the goals and the expected goals from them; green when the goals went the team's way
       // by more than the shots were worth, red when against
@@ -1362,10 +1315,6 @@ function playerDetailHtml(playerId, teamData, sec, tm) {
       { name: "On ice against", cells: [...[0, 1, 2].map(i => onCell(a[i], gA[i], xA[i], true)), onCell(sum3(a), sum3(gA), sum3(xA), true)] },
       { name: "Share", cells: [...f.map((x, i) => share(x, a[i])), share(sum3(f), sum3(a))] },
     ], "Total");
-    return dangerMixHtml("Own shots", "the shots on goal he took, by how dangerous each was", ownN, ownG, ownX)
-      + dangerButterflyHtml("Chances while he was on the ice", "shots on goal for and against his team", f, a, { forLabel: "For his team", againstLabel: "Against" })
-      + dangerButterflyHtml("Expected goals while he was on the ice", "diamonds are the goals actually scored", xF, xA, { fmt: (v) => v.toFixed(1), gf: gF, ga: gA, forLabel: "For his team", againstLabel: "Against" })
-      + dzDetails(table);
   })() : "";
   // goalies: shots faced, goals allowed and goals saved above expected in each band
   const goalieDangerTable = p.danger ? (() => {
@@ -1414,7 +1363,7 @@ function playerDetailHtml(playerId, teamData, sec, tm) {
       ${advanced && !isGoalie ? `<div class="detail-h3">Advanced</div>${advanced}<div class="panel-caption">CF%, xGF% and HDCF% are the team's share of shot attempts, expected goals and high-danger shots on goal while he was on the ice (all situations). OZ start % is offensive-zone shift starts over offensive plus defensive.</div>` : ""}`,
     log: () => `<div class="detail-h3">Game Log (${s.gp} games)</div>${glog ? goalieLogTable(glog) : log + gsKeyHtml("Raw and Adjusted colors")}`,
     splits: () => `${splits ? `<div class="detail-h3">By situation</div>${splits}` : ""}
-      ${dangerTable ? `<div class="detail-h3">Shot danger</div>${dangerTable}<div class="panel-caption">The first bar splits the shots on goal he took by how dangerous each was (high 14%+ to score, medium 7-14%, low under 7%). The two charts below it set his team's chances while he was on the ice against the chances it allowed, by the same bands, and then what those chances were worth in expected goals; a diamond marks the goals actually scored, so a diamond past the end of a bar means more goals than the chances were worth. The share is his team's part of the chances (green above 55%, red below 45%). "Show the numbers" opens the full grid. Own shots are the shots on goal he took, by how likely each was to score. Under each count are his goals and his expected goals (xG) from those shots, the chance each had of scoring added up: green means he scored more than expected, red fewer. On ice for and against are the shots on goal his team took and allowed while he was out there, each with the goals and expected goals from them: for the team, green means more goals than the shots were worth; against it, green means fewer goals allowed than expected. Share is his team's part of the shots.</div>` : ""}`,
+      ${dangerTable ? `<div class="detail-h3">Shot danger</div>${dangerTable}<div class="panel-caption">Own shots are the shots on goal he took, by how likely each was to score (high 14%+, medium 7-14%, low under 7%). Under each count are his goals and his expected goals (xG) from those shots, the chance each had of scoring added up: green means he scored more than expected, red fewer. On ice for and against are the shots on goal his team took and allowed while he was out there, each with the goals and expected goals from them: for the team, green means more goals than the shots were worth; against it, green means fewer goals allowed than expected. Share is his team's part of the shots.</div>` : ""}`,
     danger: () => goalieDangerTable ? `<div class="detail-h3">Goalie results by shot danger</div>${goalieDangerTable}<div class="panel-caption">GSAx is expected goals against minus goals allowed in each band.</div>` : '<div class="empty">No shot-danger data yet.</div>',
     units: () => (bt ? `<div class="panel-caption">Showing his lines and pairs with ${teamData.abbrev}.${btTeams.length > 1 ? ` Pick another team above and open this tab again to see the others.` : ""}</div>` : "") + (unitsHtml || '<div class="empty">No lines or pairs with enough time together yet.</div>'),
   }[secKey]();
