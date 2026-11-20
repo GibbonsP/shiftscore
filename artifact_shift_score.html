@@ -62,9 +62,6 @@ h1 span { color: var(--accent); }
 }
 .masthead-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .season-select { min-width: 0; padding: 6px 10px; font-family: var(--font-mono); font-size: 12.5px; }
-.sub {
-  color: var(--muted); font-size: 14.5px; margin-top: 6px; max-width: 62ch; line-height: 1.5;
-}
 
 nav.tabs {
   position: sticky; top: env(safe-area-inset-top, 0px);
@@ -238,11 +235,9 @@ header.masthead::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; pointer-events: none;
   background: repeating-linear-gradient(90deg, var(--red) 0 16px, transparent 16px 21px);
 }
-.masthead-row, .sub { position: relative; z-index: 1; }
-h1 { font-weight: 900; font-size: clamp(38px, 8vw, 60px); letter-spacing: 0.015em; line-height: 0.95; }
+.masthead-row, h1 { font-weight: 900; font-size: clamp(38px, 8vw, 60px); letter-spacing: 0.015em; line-height: 0.95; }
 h1 span { color: var(--red); }
 .season-tag { font-size: 13.5px; letter-spacing: 0.02em; }
-.sub { font-size: 15.5px; max-width: 56ch; color: var(--ink); opacity: 0.82; }
 
 /* tabs: ruled board tabs, not pills */
 nav.tabs { gap: 0; padding: 8px 0 0; border-bottom: 2px solid var(--ink); }
@@ -412,7 +407,6 @@ footer { border-top: 2px solid var(--ink); color: var(--muted); font-size: 13px;
 header.masthead { background: var(--board); color: var(--board-ink); margin-top: 16px; padding-left: 22px; padding-right: 22px; padding-bottom: 28px; border-radius: 2px; }
 header.masthead::before { opacity: 0.5; }
 h1 { color: var(--board-ink); }
-.sub { color: var(--board-ink); opacity: 0.85; }
 .season-tag { color: var(--board-ink); opacity: 0.8; }
 
 /* active tab is a navy block with a light-blue foot */
@@ -632,19 +626,19 @@ header.masthead {
   background:
     radial-gradient(circle at 88% 12%, rgba(124, 196, 245, 0.38), transparent 42%),
     linear-gradient(135deg, var(--board) 0%, color-mix(in srgb, var(--board) 52%, var(--accent)) 115%);
-  padding-top: calc(30px + env(safe-area-inset-top, 0px));
-  padding-bottom: 58px;
+  padding-top: calc(26px + env(safe-area-inset-top, 0px));
+  padding-bottom: 50px;   /* the tab bar overlaps the lower edge */
 }
 header.masthead::after { display: none; }
 header.masthead::before { right: 6%; top: 46%; width: 150px; height: 150px; opacity: 0.22; border-width: 2px; }
-.masthead-row { align-items: flex-end; gap: 18px 24px; }
+.masthead-row { align-items: center; gap: 14px 24px; }
 .masthead-tools {
-  flex-direction: column; align-items: flex-end; gap: 6px; padding: 10px 14px; border-radius: 16px;
-  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; padding: 10px 14px; border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); min-width: min(100%, 250px);
 }
+.masthead-tools .season-tag { grid-column: 1 / -1; text-align: left; margin: 0; }
 .masthead-tools .season-select { background: transparent; color: var(--board-ink); border-color: rgba(255, 255, 255, 0.4); }
 .masthead-tools .season-select option { color: #0a1f3d; background: #ffffff; }
-.sub { margin-top: 12px; max-width: 52ch; }
 
 nav.tabs {
   position: sticky; top: calc(env(safe-area-inset-top, 0px) + 10px); z-index: 10;
@@ -663,7 +657,7 @@ nav.tabs button.has-live::before {
 .panel { padding-top: 30px; }
 
 @media (max-width: 480px) {
-  header.masthead { padding-bottom: 54px; }
+  header.masthead { padding-bottom: 48px; }
   .masthead-tools { flex-direction: row; align-items: center; }
   nav.tabs { margin-left: 4px; margin-right: 4px; max-width: calc(100% - 8px); }
   nav.tabs button { padding: 8px 13px; }
@@ -675,7 +669,6 @@ nav.tabs button.has-live::before {
    slightly wider page. A first pass went larger (16/17px); this is the middle. */
 .wrap { max-width: 1160px; }
 body { font-size: 16px; line-height: 1.55; }
-.sub { font-size: 17px; line-height: 1.55; max-width: 58ch; }
 .season-tag { font-size: 14px; }
 .season-select { font-size: 14px; padding: 7px 12px; }
 nav.tabs button { font-size: 16px; padding: 9px 18px; }
@@ -1019,7 +1012,6 @@ table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
         <div class="season-tag" id="season-tag">loading&hellip;</div>
       </div>
     </div>
-    <div class="sub">Every NHL game scored player by player, with credit adjusted for who each player skated with and against. Built from the league's own play-by-play and shift data.</div>
   </header>
 
   <nav class="tabs" id="tabs" role="tablist"></nav>
