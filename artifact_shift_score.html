@@ -993,6 +993,27 @@ table.auto-sort thead tr:last-child th { cursor: pointer; user-select: none; }
 table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
 .sort-arrow { margin-left: 4px; font-size: 11px; opacity: .85; }
 .pc-actions { margin: 10px 0 2px; }
+/* playoff odds */
+.odds-table td { vertical-align: middle; }
+.odds-cell { position: relative; min-width: 76px; background: linear-gradient(90deg, rgba(var(--c), 0.34) var(--p), transparent var(--p)); font-weight: 700; }
+.odds-table tr[data-open-team] { cursor: pointer; } .odds-table tr[data-open-team]:hover td { background-color: var(--rail); }
+/* results vs. chances */
+.rv-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 6px 0 4px; font-size: 13px; color: var(--muted); } .rv-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.rv-legend i { position: static; display: inline-block; transform: none; }
+.rv-section { margin-bottom: 8px; }
+.rv-axis { display: grid; grid-template-columns: minmax(150px, 220px) 1fr minmax(170px, 270px); gap: 14px; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.rv-ticks { position: relative; height: 16px; } .rv-ticks span { position: absolute; transform: translateX(-50%); }
+.rv-row { display: grid; grid-template-columns: minmax(150px, 220px) 1fr minmax(170px, 270px); gap: 14px; align-items: center; padding: 8px 6px; border-radius: 10px; cursor: pointer; }
+.rv-row:hover { background: var(--rail); }
+.rv-team { display: flex; align-items: center; gap: 10px; min-width: 0; } .rv-team span { display: flex; flex-direction: column; min-width: 0; } .rv-team small, .rv-verdict small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.rv-track { position: relative; height: 26px; } .rv-track::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 2px; background: var(--line); border-radius: 2px; }
+.rv-avg { position: absolute; top: 3px; width: 2px; height: 20px; background: var(--muted); opacity: 0.45; border-radius: 1px; }
+.rv-ring, .rv-dot { position: absolute; top: 5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; box-sizing: border-box; }
+.rv-ring { border: 2.5px solid var(--ink); background: var(--surface); } .rv-dot { background: var(--ink); border: 2px solid var(--surface); }
+.rv-link { position: absolute; top: 11px; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.6; }
+.rv-dot.up, .rv-link.up { background: #e0a64f; } .rv-dot.down, .rv-link.down { background: #4fa8e0; }
+.rv-verdict { display: flex; flex-direction: column; } .rv-verdict b { font-size: 14px; } .rv-verdict.up b { color: #b87a1f; } .rv-verdict.down b { color: #2f7fb8; }
+@media (max-width: 760px) { .rv-axis { display: none; } .rv-row { grid-template-columns: 1fr; gap: 6px; padding: 10px 6px; } }
 /* game preview */
 .pred-bar { display: flex; height: 38px; border-radius: 10px; overflow: hidden; font-weight: 800; color: #fff; }
 .pred-bar span { display: flex; align-items: center; padding: 0 12px; white-space: nowrap; overflow: hidden; }

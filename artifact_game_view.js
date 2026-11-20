@@ -1492,6 +1492,7 @@ const GameView = (() => {
   window.__autoSortWired = true;
   const cellKey = (td) => {
     const text = td.textContent.replace(/\s+/g, " ").trim();
+    if (td.dataset.sort !== undefined) return td.dataset.sort === "" ? null : { n: parseFloat(td.dataset.sort), s: text };   // a cell can say what it sorts by
     if (!text || /^[–—-]$/.test(text)) return null;
     const m = text.replace(/−/g, "-");
     let x;

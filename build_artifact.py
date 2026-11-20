@@ -97,6 +97,7 @@ for season in all_seasons:
     )
 
     root = f"artifact_data/{season}"
+    old_odds = open(f"{root}/odds.json", "rb").read() if os.path.exists(f"{root}/odds.json") else None   # kept if the NHL's data can't be reached this time
     old_hashes = {pub: file_hash(path) for pub, path in prev_manifest.get(season, {}).items() if os.path.exists(path)}
     shutil.rmtree(root, ignore_errors=True)
     files = {}
@@ -114,6 +115,22 @@ for season in all_seasons:
     with open(f"{root}/league_units.json", "w") as f:
         json.dump(out["league_units"], f, separators=(",", ":"))
     files[f"data/{season}/league_units.json"] = f"{root}/league_units.json"
+    # playoff odds, for the season in progress: simulate the rest of the schedule from the NHL's standings and the teams' recent play
+    if season_meta[-1]["in_progress"]:
+        try:
+            from nhl_impact import playoff_odds
+            i = all_seasons.index(season)
+            odds = playoff_odds.simulate(season, all_seasons[i - 1] if i else None)
+            with open(f"{root}/odds.json", "w") as f:
+                json.dump(odds, f, separators=(",", ":"))
+            files[f"data/{season}/odds.json"] = f"{root}/odds.json"
+            print(f"  playoff odds: {len(odds['teams'])} teams, {odds['games_left']} games left")
+        except Exception as e:
+            print("playoff odds failed, keeping the last ones:", type(e).__name__, e)
+            if old_odds:
+                with open(f"{root}/odds.json", "wb") as f:
+                    f.write(old_odds)
+                files[f"data/{season}/odds.json"] = f"{root}/odds.json"
     manifest[season] = files
     changed["changed"] += [pub for pub, path in files.items() if old_hashes.get(pub) != file_hash(path)]
     changed["removed"] += [pub for pub in old_hashes if pub not in files]
