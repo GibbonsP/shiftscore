@@ -79,6 +79,11 @@ jobs:
         id: update
         run: python ci/run_update.py
 
+      - name: Full-size headshots for players that don't have one yet
+        id: heads
+        continue-on-error: true
+        run: python fetch_headshots_lg.py
+
       - name: Assemble the site
         run: python build_site.py
 
@@ -91,5 +96,5 @@ jobs:
           command: pages deploy site --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main --commit-dirty=true
 
       - name: Save state (when new games were ingested or after a full rebuild)
-        if: steps.update.outputs.updated == 'true' || inputs.full_rebuild || steps.fill.outputs.filled == 'true'
+        if: steps.update.outputs.updated == 'true' || inputs.full_rebuild || steps.fill.outputs.filled == 'true' || steps.heads.outputs.added == 'true'
         run: python ci/state.py push

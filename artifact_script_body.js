@@ -1094,6 +1094,10 @@ function pctBarsHtml(c) {
 let lastPctCard = null;
 const slugOf = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 async function playerPhotoUri(pid) {
+  try {   // the full-size photo when the site has one
+    const r = await fetch(`data/photos_lg/${pid}.jpg`);
+    if (r.ok) { const b = await r.blob(); return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); }); }
+  } catch (e) {}
   try {
     IMG.photoTeam = IMG.photoTeam || jsonOrEmpty("data/photo_team.json");
     const t = (await IMG.photoTeam)[pid];
@@ -2447,8 +2451,11 @@ async function hydrateImages() {
     await Promise.all(teams.map(t => { IMG.photoFiles[t] = IMG.photoFiles[t] || jsonOrEmpty("data/photos/" + t + ".json"); return IMG.photoFiles[t]; }));
     for (const el of avEls) {
       const t = pt[el.dataset.pid], files = t ? await IMG.photoFiles[t] : null, b64 = files && files[el.dataset.pid];
-      if (b64) el.style.backgroundImage = `url(data:image/jpeg;base64,${b64})`;
-      else el.textContent = el.dataset.ini || "";
+      if (b64) {
+        el.style.backgroundImage = `url(data:image/jpeg;base64,${b64})`;
+        // a big photo (a player's page, the stars of the night) swaps to the full-size file once it has loaded; the small one shows meanwhile
+        if (el.classList.contains("avatar-lg")) { const u = `data/photos_lg/${el.dataset.pid}.jpg`, im = new Image(); im.onload = () => { el.style.backgroundImage = `url(${u})`; }; im.src = u; }
+      } else el.textContent = el.dataset.ini || "";
     }
   }
 }
