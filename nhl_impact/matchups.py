@@ -167,3 +167,39 @@ def backfill(conn, max_seconds: float | None = None) -> int:
         if n % 200 == 0:
             print(f"  matchups: {n} games", flush=True)
     return n
+
+
+def season_vs_by_unit(conn) -> dict:
+    """Each forward line's and defense pair's season of 5-on-5 matchups, grouped by the slot of the unit it faced (L1-L4, P1-P3: ranked by time
+    together that game, the way the site ranks them): {unit key: {opposing slot: [toi, cf, ca, gf, ga, xgf, xga]}}. Only games where both units held
+    a slot are counted (the matchup table keeps nothing else), so the totals are the time it spent against the other team's regular lines and pairs."""
+    from .unit_pages import unit_key
+    abbrev, teams_of = {}, {}
+    for gid, hid, aid, hab, aab in conn.execute("SELECT game_id, home_team_id, away_team_id, home_team_abbrev, away_team_abbrev FROM games"):
+        abbrev[hid], abbrev[aid] = hab, aab
+        teams_of[gid] = (hid, aid)
+    ranked: dict[tuple, list] = {}
+    for gid, tid, utype, pids, toi in conn.execute("SELECT game_id, team_id, unit_type, player_ids, toi_sec FROM unit_game_stats WHERE unit_type IN ('line', 'pair')"):
+        ranked.setdefault((gid, tid, utype), []).append((toi, pids))
+    slot = {}
+    for (gid, tid, utype), lst in ranked.items():
+        lst.sort(key=lambda x: -x[0])
+        for i, (_toi, pids) in enumerate(lst[: (4 if utype == "line" else 3)]):
+            slot[(gid, tid, utype, pids)] = ("L" if utype == "line" else "P") + str(i + 1)
+    out: dict[str, dict] = {}
+    for gid, tid, utype, pids, otype, opids, toi, cf, ca, gf, ga, xgf, xga in conn.execute(
+        """SELECT game_id, team_id, unit_type, player_ids, opp_type, opp_player_ids, toi_sec, cf, ca, gf, ga, xgf, xga
+           FROM unit_matchup_stats WHERE unit_type IN ('line', 'pair')"""
+    ):
+        h, a = teams_of.get(gid, (None, None))
+        opp_team = a if tid == h else h
+        tag = slot.get((gid, opp_team, otype, opids))
+        if not tag or tid not in abbrev:
+            continue
+        row = out.setdefault(unit_key(abbrev[tid], utype, pids), {}).setdefault(tag, [0, 0, 0, 0, 0, 0.0, 0.0])
+        for i, v in enumerate((toi, cf, ca, gf, ga, xgf or 0, xga or 0)):
+            row[i] += v
+    for k, d in out.items():
+        for tag, r in d.items():
+            r[5], r[6] = round(r[5], 2), round(r[6], 2)
+    return out

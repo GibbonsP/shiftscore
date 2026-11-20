@@ -268,6 +268,7 @@ def _compact_unit(u, home_by_game):
     return {
         "key": u["key"], "type": u["type"], "players": u["players"], "summary": u["summary"],
         **({"card": u["card"]} if u.get("card") else {}),
+        **({"vs": u["vs"]} if u.get("vs") else {}),
         "log": [
             [g["date"], g["opp"], g["loc"], g["result"], g["toi_sec"], g["cf"], g["ca"], g["gf"], g["ga"],
              g["xgf"], g["xga"], g["hdcf"], g["hdca"], g["score"], g["game_id"], home_by_game[g["game_id"]],
@@ -941,6 +942,15 @@ def build_season(conn, pipeline) -> dict:
     """Everything the page needs for one (sliced) season."""
     units = build_units(conn, 1)  # every unit gets a page
     attach_unit_cards(units)
+    # who each line and pair played against (by the other team's slot), for the "Who it plays against" table on its page
+    try:
+        from .matchups import season_vs_by_unit
+        vs = season_vs_by_unit(conn)
+        for u in units:
+            if u["key"] in vs and sum(r[0] for r in vs[u["key"]].values()) >= 120:
+                u["vs"] = vs[u["key"]]
+    except Exception:   # a database from before the matchup table existed
+        pass
     unit_keys = {u["key"] for u in units}
     board = leaderboards(conn, unit_keys, units)
     team_data, teams_index, players_index, unit_data = team_shards(conn, units)

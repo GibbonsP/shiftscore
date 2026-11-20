@@ -530,6 +530,49 @@ function dangerCardHtml(rows, total) {
   const legend = `<div class="dz-legend"><span>Bars: how many shots in each danger band${rows.some(r => r.cells.some(c => /%$/.test(String(c[0])))) ? ", and the share of them (the mark is 50%)" : ""}.</span><span><i class="over"></i>More goals than the shots were worth</span><span><i class="under"></i>Fewer</span></div>`;
   return `<div class="dz-wrap"><div class="dz" style="--dz-n:4">${head}${body}</div></div>${legend}`;
 }
+
+// --- Unit pages: best and worst games, and who the unit played against.
+// Best and worst nights by Unit Score from the unit's own game log (every kind of unit, special teams included). A night needs a minimum of time
+// together so a few seconds can't make a unit's best or worst game.
+const UNIT_GAME_MIN_SEC = { line: 60, pair: 60, pp: 20, pk: 20, ev4: 20, ev3: 20 };
+function unitBestWorstHtml(u) {
+  const min = UNIT_GAME_MIN_SEC[u.type] || 20, games = (u.log || []).filter(g => g[4] >= min);
+  const n = Math.min(5, Math.floor(games.length / 2));
+  if (n < 2) return "";
+  const graded = u.type === "line" || u.type === "pair", tag = (g) => (graded && g[20] ? `${u.type === "line" ? "L" : "P"}${g[20]}` : "");
+  const head = [{ label: "Date" }, { label: "Opp" }, { label: "Result" }, { label: "TOI", num: true }, { label: "Unit Score", num: true }, { label: "xGF&ndash;xGA", num: true }, { label: "GF&ndash;GA", num: true }, ...(graded ? [{ label: "Grade" }] : [])];
+  const table = (list) => statTable(head, list.map(g => [gameLink(g[14], g[15], g[0]), g[2] + " " + teamLink(g[1]), g[3], toiStr(g[4]), scoreCell(g[13]), `${g[9].toFixed(2)}&ndash;${g[10].toFixed(2)}`, `${g[7]}&ndash;${g[8]}`,
+    ...(graded ? [g[20] ? `<span class="detail-sub">${tag(g)}</span> ${unitGradeHtml(g[13], tag(g))}` : "&ndash;"] : [])]));
+  const sorted = games.slice().sort((a, b) => b[13] - a[13]);
+  return `<div class="detail-h3">Best and worst games</div>
+    <div class="board-sub">Best ${n}</div>${table(sorted.slice(0, n))}
+    <div class="board-sub" style="margin-top:14px">Worst ${n}</div>${table(sorted.slice(-n).reverse())}
+    <div class="panel-caption">Ranked by Unit Score, with at least ${toiStr(min)} together in the game.${graded ? " The grade is where that night falls among every game by a unit in the same slot since 2024-25." : ""}</div>`;
+}
+// For a forward line or defense pair: its 5-on-5 time against each of the other team's forward lines and defense pairs (ranked by time together
+// that night), with how the chances went. u.vs is built into the team file (nhl_impact/matchups.season_vs_by_unit).
+const VS_NAMES = { L1: "Top line", L2: "Second line", L3: "Third line", L4: "Fourth line", P1: "Top pair", P2: "Second pair", P3: "Third pair" };
+function unitVsHtml(u) {
+  if (!u.vs || (u.type !== "line" && u.type !== "pair")) return "";
+  const groups = [["Against forward lines", ["L1", "L2", "L3", "L4"]], ["Against defense pairs", ["P1", "P2", "P3"]]];
+  const tot = (tags) => tags.reduce((a, t) => a + ((u.vs[t] || [0])[0]), 0);
+  const tl = tot(["L1", "L2", "L3", "L4"]);
+  if (!tl) return "";
+  const top2 = tot(["L1", "L2"]), xf = ["L1", "L2"].reduce((a, t) => a + ((u.vs[t] || [0, 0, 0, 0, 0, 0, 0])[5]), 0), xa = ["L1", "L2"].reduce((a, t) => a + ((u.vs[t] || [0, 0, 0, 0, 0, 0, 0])[6]), 0);
+  const sentence = `Spends <b>${Math.round(100 * top2 / tl)}%</b> of its 5-on-5 time against the other team's top two lines${xf + xa >= 0.5 ? `, with <b>${Math.round(100 * xf / (xf + xa))}%</b> of the expected goals in those minutes` : ""}.`;
+  const body = groups.map(([title, tags]) => {
+    const gt = tot(tags);
+    const rows = tags.filter(t => u.vs[t]).map(t => { const r = u.vs[t], [toi, cf, ca, gf, ga, xgf, xga] = r, share = gt ? toi / gt : 0, small = toi < 120;
+      return `<tr class="${small ? "vs-small" : ""}"><td><b>${t}</b> <span class="detail-sub">${VS_NAMES[t]}</span></td><td class="num">${toiStr(toi)}</td>
+        <td class="num"><span class="vs-bar"><i style="width:${Math.round(100 * share)}%"></i></span> ${Math.round(100 * share)}%</td>
+        <td class="num">${xgf.toFixed(2)}&ndash;${xga.toFixed(2)}</td><td class="num">${xgf + xga >= 0.3 ? `<span class="${xgf > xga ? "pos" : xgf < xga ? "neg" : ""}">${Math.round(100 * xgf / (xgf + xga))}%</span>` : "&ndash;"}</td>
+        <td class="num">${gf}&ndash;${ga}</td></tr>`; }).join("");
+    return rows ? `<tr class="vs-group"><td colspan="6">${title}</td></tr>${rows}` : "";
+  }).join("");
+  return `<div class="detail-h3">Who it plays against</div><div class="panel-caption vs-sentence">${sentence}</div>
+    <div class="table-scroll"><table class="vs-table"><thead><tr><th>Opposing unit</th><th class="num">Time</th><th class="num">Share of its time</th><th class="num">xGF&ndash;xGA</th><th class="num">xGF%</th><th class="num">GF&ndash;GA</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="panel-caption">Five-on-five only. Opposing units are grouped by the slot they held that night, ranked by time together among their team's lines or pairs. Only games where this unit was one of its own team's top four lines or three pairs are counted, so the times are what it spent against regulars. Faded rows have under 2:00, too little to read much into.</div>`;
+}
 function unitDetailHtml(data, key) {
   const u = (data.units || []).find(x => x.key === key);
   const back = `<button class="back-btn" data-open-team="${data.abbrev}">&larr; ${data.abbrev}</button>`;
@@ -572,6 +615,8 @@ function unitDetailHtml(data, key) {
     <div class="detail-h3">Season Summary</div>${summary}
     <div class="detail-h3">Shot danger</div>${dangerCard}
     <div class="panel-caption">Shots on goal for and against while this unit was on the ice, by how likely each shot was to score, with the goals and expected goals (xG) from them. Under shots for, green means more goals than the shots were worth; under shots against, green means fewer goals allowed than expected. Share is the unit's part of the shots in each band; green means it got more than half, red less. In the game log, HD, MD and LD are the high-, medium- and low-danger shots for&ndash;against.</div>
+    ${unitVsHtml(u)}
+    ${unitBestWorstHtml(u)}
     <div class="detail-h3">Game Log (${s.gp} games)</div>${log}
   `;
 }
