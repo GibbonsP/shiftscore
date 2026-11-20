@@ -998,12 +998,22 @@ table.auto-sort thead tr:last-child th { cursor: pointer; user-select: none; }
 table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
 .sort-arrow { margin-left: 4px; font-size: 11px; opacity: .85; }
 .pc-actions { margin: 10px 0 2px; }
-/* site search: in the bottom-right corner of the header, just above the tabs (the tabs pill overlaps the header's bottom edge, so this row takes no space of its own) */
-.search-row { position: relative; height: 0; z-index: 12; }
-.site-search-wrap { position: absolute; right: 16px; top: -56px; width: min(300px, calc(100% - 32px)); }
-.site-search { width: 100%; box-sizing: border-box; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.12); color: var(--board-ink, #fff); font: 500 13.5px var(--font-body); }
-@media (max-width: 640px) { header.masthead { padding-bottom: 76px; } }
-.site-search::placeholder { color: rgba(255, 255, 255, 0.78); } .site-search:focus { outline: 2px solid rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.2); }
+/* site search on the tabs bar. Wide screens: a round magnifier button at the far right of the bar that opens into a box when clicked (or when / is pressed),
+   so the tabs keep all their room. Narrow screens: a full-width box on its own line under the tabs. */
+.tabbar { display: block; }
+.site-search-wrap { position: relative; margin: 10px 12px 0; }
+.site-search { width: 100%; box-sizing: border-box; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 14px var(--font-body); box-shadow: 0 10px 26px -16px rgba(10, 31, 61, 0.5); }
+.site-search::placeholder { color: var(--muted); } .site-search:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+@media (min-width: 900px) {
+  .tabbar { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 10px); z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -26px 12px 0; }
+  .tabbar nav.tabs { position: static; margin: 0; max-width: none; min-width: 0; flex: 0 1 auto; }
+  .tabbar .site-search-wrap { margin: 0; flex: 0 0 44px; width: 44px; height: 44px; }
+  .tabbar .site-search { position: absolute; right: 0; top: 0; width: 44px; height: 44px; padding: 0; cursor: pointer; color: transparent; transition: width 0.18s ease;
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a9aa3' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5 21 21'/%3E%3C/svg%3E") center / 20px no-repeat; }
+  .tabbar .site-search::placeholder { color: transparent; }
+  .tabbar .site-search:focus, .tabbar .site-search:not(:placeholder-shown) { width: 300px; padding: 0 16px 0 42px; cursor: text; color: var(--ink); background-position: 13px center; background-size: 18px; }
+  .tabbar .site-search:focus::placeholder { color: var(--muted); }
+}
 .search-results { position: absolute; z-index: 60; top: calc(100% + 6px); right: 0; width: min(380px, 88vw); max-height: 70vh; overflow-y: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28); padding: 6px; }
 .sr-h { font: 700 11px var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
 .sr-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; color: var(--ink); text-decoration: none; }
@@ -1033,14 +1043,13 @@ table.auto-sort thead tr:last-child th:hover { text-decoration: underline; }
     <div class="sub">Every NHL game scored player by player, with credit adjusted for who each player skated with and against. Built from the league's own play-by-play and shift data.</div>
   </header>
 
-  <div class="search-row">
+  <div class="tabbar">
+    <nav class="tabs" id="tabs" role="tablist"></nav>
     <div class="site-search-wrap">
       <input type="search" id="site-search" class="site-search" placeholder="Search players and teams  ( / )" autocomplete="off" spellcheck="false" aria-label="Search players and teams" aria-controls="search-results" aria-expanded="false">
       <div id="search-results" class="search-results" role="listbox" hidden></div>
     </div>
   </div>
-
-  <nav class="tabs" id="tabs" role="tablist"></nav>
 
   <section class="ticker" id="ticker" aria-label="Scores" hidden></section>
 
