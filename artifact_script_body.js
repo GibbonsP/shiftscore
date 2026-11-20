@@ -2835,69 +2835,6 @@ document.addEventListener("click", async (ev) => {
 });
 
 
-// --- Search (the box in the header): players from every season's index (the newest season a player appears in), and teams. Type a name and pick a
-// result, or press / anywhere to jump to the box; arrows and Enter work too. Results are ordinary links, so the page's own click handling opens them.
-let searchIndex = null;
-const foldText = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-function buildSearchIndex() {
-  const players = new Map();
-  [...DATA.seasons].reverse().forEach(sx => {
-    const by = DATA.by_season[sx.id] || {};
-    (by.players_index || []).forEach(p => { if (!players.has(String(p.id))) players.set(String(p.id), { id: p.id, name: p.name, team: p.team, pos: p.pos, gp: p.gp, season: sx.id, label: sx.label }); });
-    (by.goalies || []).forEach(g => { if (!players.has(String(g.pid))) players.set(String(g.pid), { id: g.pid, name: g.goalie, team: g.team, pos: "G", gp: g.gp, season: sx.id, label: sx.label }); });
-  });
-  const teams = Object.keys(TEAM_NAMES).map(a => ({ abbrev: a, name: TEAM_NAMES[a] }));
-  searchIndex = { players: [...players.values()].map(p => Object.assign(p, { f: foldText(p.name), words: foldText(p.name).split(/\s+/) })),
-    teams: teams.map(t => Object.assign(t, { f: foldText(t.name + " " + t.abbrev), words: foldText(t.name).split(/\s+/).concat(foldText(t.abbrev)) })) };
-}
-function searchFor(q) {
-  if (!searchIndex) buildSearchIndex();
-  const f = foldText(q).trim();
-  if (!f) return { players: [], teams: [] };
-  const rank = (e) => {
-    if (e.words[e.words.length - 1] === f || e.f === f) return 0;
-    if (e.f.startsWith(f)) return 1;
-    if (e.words.some(w => w.startsWith(f))) return 2;
-    return e.f.includes(f) ? 3 : 9;
-  };
-  const cur = SEASON;
-  const players = searchIndex.players.map(e => [rank(e), e]).filter(x => x[0] < 9)
-    .sort((a, b) => a[0] - b[0] || (b[1].season === cur) - (a[1].season === cur) || b[1].gp - a[1].gp).slice(0, 8).map(x => x[1]);
-  const teamHits = searchIndex.teams.map(e => [rank(e), e]).filter(x => x[0] < 9).sort((a, b) => a[0] - b[0]).slice(0, 3);
-  return { players, teams: teamHits.map(x => x[1]), teamsFirst: teamHits.length > 0 && teamHits[0][0] === 0 };   // an exact team name or code (PHI) leads
-}
-function renderSearch(q) {
-  const box = document.getElementById("search-results"), input = document.getElementById("site-search");
-  if (!q.trim()) { box.hidden = true; input.setAttribute("aria-expanded", "false"); return; }
-  const r = searchFor(q);
-  const player = (p) => `<a class="sr-item" role="option" data-open-player="${p.id}" data-player-team="${p.team}" data-player-season="${p.season}">${avatarSpan(p.id, p.name)}<span class="sr-name">${escapeHtml(p.name)}</span>
-    <span class="sr-meta">${logoSpan(p.team)}${p.team}${p.pos ? " &middot; " + p.pos : ""}${p.season !== SEASON ? " &middot; " + p.label : ""}</span></a>`;
-  const team = (t) => `<a class="sr-item" role="option" data-open-team="${t.abbrev}">${logoSpan(t.abbrev)}<span class="sr-name">${escapeHtml(t.name)}</span><span class="sr-meta">${t.abbrev}</span></a>`;
-  const pHtml = r.players.length ? `<div class="sr-h">Players</div>${r.players.map(player).join("")}` : "", tHtml = r.teams.length ? `<div class="sr-h">Teams</div>${r.teams.map(team).join("")}` : "";
-  box.innerHTML = (r.teamsFirst ? tHtml + pHtml : pHtml + tHtml) || '<div class="sr-none">Nothing matches that.</div>';
-  box.hidden = false; input.setAttribute("aria-expanded", "true");
-  const first = box.querySelector(".sr-item"); if (first) first.classList.add("on");
-  hydrateImages();
-}
-(function wireSearch() {
-  const input = document.getElementById("site-search"), box = document.getElementById("search-results");
-  if (!input || !box) return;
-  const close = () => { box.hidden = true; input.setAttribute("aria-expanded", "false"); };
-  input.addEventListener("input", () => renderSearch(input.value));
-  input.addEventListener("focus", () => { if (input.value.trim()) renderSearch(input.value); });
-  input.addEventListener("keydown", (ev) => {
-    const items = [...box.querySelectorAll(".sr-item")], i = items.findIndex(x => x.classList.contains("on"));
-    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); if (!items.length) return; items.forEach(x => x.classList.remove("on")); const n = (i + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; items[n].classList.add("on"); items[n].scrollIntoView({ block: "nearest" }); }
-    else if (ev.key === "Enter") { ev.preventDefault(); const t = items[i >= 0 ? i : 0]; if (t) t.click(); }
-    else if (ev.key === "Escape") { close(); input.blur(); }
-  });
-  box.addEventListener("click", () => setTimeout(() => { close(); input.value = ""; input.blur(); }, 0));
-  document.addEventListener("click", (ev) => { if (!ev.target.closest(".site-search-wrap")) close(); });
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "/" && !ev.metaKey && !ev.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || "")) { ev.preventDefault(); input.focus(); input.select(); }
-  });
-})();
-
 const HASH_ALIAS = { players: "skaters", live: "home" };   // links from before the tabs were reorganized
 applyRoute(location.hash);
 buildPage();
