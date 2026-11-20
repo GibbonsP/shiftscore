@@ -111,13 +111,24 @@ def simulate(season: str, prev_season: str | None = None, sims: int = SIMS, seed
     G = len(remaining)
     home = np.array([idx[h] for *_x, h in remaining]); away = np.array([idx[a] for _g, _d, a, _h in remaining])
     probs = np.zeros((G, 4))     # home regulation win, home overtime win, away overtime win, away regulation win
+    # the schedule's worth in standings points: expected points from each remaining game against the real opponent, minus the same game against an
+    # average team (same building, same rest), added up. Positive means the remaining schedule is easier than average.
+    avg_f = float(np.mean([rates[t][0] for t in teams])); avg_a = float(np.mean([rates[t][1] for t in teams]))
+    sos_pts = {t: 0.0 for t in teams}
+    exp_pts = lambda p, home: (2 * (p[0] + p[1]) + p[2]) if home else (2 * (p[3] + p[2]) + p[1])
     for g, (_gid, d, a, h) in enumerate(remaining):
         (hf, ha), (af, aa) = rates[h], rates[a]
-        lh, la = HOME * hf * aa / L, af * ha / (HOME * L)
-        if b2b(a, d):
-            la *= AWAY_B2B; lh /= AWAY_B2B ** 0.5
-        pr_h, pr_a, tie = _outcome_probs(lh, la)
-        probs[g] = [pr_h, tie / 2, tie / 2, pr_a]
+        flag = b2b(a, d)
+
+        def mk(hf_, ha_, af_, aa_):
+            lh, la = HOME * hf_ * aa_ / L, af_ * ha_ / (HOME * L)
+            if flag:
+                la *= AWAY_B2B; lh /= AWAY_B2B ** 0.5
+            pr_h, pr_a, tie = _outcome_probs(lh, la)
+            return [pr_h, tie / 2, tie / 2, pr_a]
+        probs[g] = mk(hf, ha, af, aa)
+        sos_pts[h] += exp_pts(probs[g], True) - exp_pts(mk(hf, ha, avg_f, avg_a), True)       # the home team against an average visitor
+        sos_pts[a] += exp_pts(probs[g], False) - exp_pts(mk(avg_f, avg_a, af, aa), False)     # the visitor against an average home team
 
     rng = np.random.default_rng(seed)
     cum = np.cumsum(probs, axis=1)
@@ -171,7 +182,7 @@ def simulate(season: str, prev_season: str | None = None, sims: int = SIMS, seed
             "playoffs": round(float(made[:, i].mean()), 4), "division": round(float(won_div[:, i].mean()), 4),
             "conf_top": round(float(top_conf[:, i].mean()), 4), "pres": round(float(pres[:, i].mean()), 4),
             "pts_mean": round(float(pts[:, i].mean()), 1), "pts_p10": int(np.percentile(pts[:, i], 10)), "pts_p90": int(np.percentile(pts[:, i], 90)),
-            "sos": round(float(np.mean(sos[t])), 3) if sos[t] else None, "power": round(strength[t], 3),
+            "sos": round(float(np.mean(sos[t])), 3) if sos[t] else None, "sos_pts": round(sos_pts[t], 1), "power": round(strength[t], 3),
         })
     # the points the last wild card needed, by conference (median of the 16th team's... the lowest team in)
     cutoff = {}
@@ -186,5 +197,5 @@ if __name__ == "__main__":
     import sys
     res = simulate(sys.argv[1] if len(sys.argv) > 1 else "20262027", sys.argv[2] if len(sys.argv) > 2 else "20252026")
     for t in sorted(res["teams"], key=lambda x: -x["playoffs"]):
-        print(f"{t['abbrev']} {t['conf'][:1]}-{t['div'][:3]} {t['w']}-{t['l']}-{t['otl']} {t['pts']}pts  playoffs {100 * t['playoffs']:5.1f}%  div {100 * t['division']:5.1f}%  pres {100 * t['pres']:4.1f}%  proj {t['pts_mean']} ({t['pts_p10']}-{t['pts_p90']})  sos {t['sos']}")
+        print(f"{t['abbrev']} {t['conf'][:1]}-{t['div'][:3]} {t['w']}-{t['l']}-{t['otl']} {t['pts']}pts  playoffs {100 * t['playoffs']:5.1f}%  div {100 * t['division']:5.1f}%  pres {100 * t['pres']:4.1f}%  proj {t['pts_mean']} ({t['pts_p10']}-{t['pts_p90']})  sos {t['sos']} ({t['sos_pts']:+.1f} pts)")
     print(res["cutoff"], res["games_left"], "games left")

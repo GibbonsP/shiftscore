@@ -824,7 +824,7 @@ function realityHtml(teams, q) {
 const oddsPct = (p) => (p >= 0.995 ? "99+" : p < 0.005 ? "&lt;1" : p >= 0.1 ? String(Math.round(100 * p)) : (100 * p).toFixed(1));
 const oddsCell = (p, hue) => `<td class="num odds-cell" data-sort="${p}" style="--p:${(100 * p).toFixed(1)}%;--c:${hue}"><span>${oddsPct(p)}%</span></td>`;
 function oddsTableHtml(rows, rankOf, withDiv) {
-  const head = ["Team", "GP", "Record", "PTS", "Proj. PTS", "Playoffs", "Division", "First overall", "Games left", "Schedule"];
+  const head = ["Team", "GP", "Record", "PTS", "Proj. PTS", "Playoffs", "Division", "First overall", "Games left", "Schedule (pts)"];
   const sosAll = rankOf.sos;
   const body = rows.map(t => `<tr data-open-team="${t.abbrev}" role="button" tabindex="0">
       <td><span class="pr-n">${rankOf.rank[t.abbrev]}</span>${logoSpan(t.abbrev)}<strong>${escapeHtml(teamName(t.abbrev))}</strong>${withDiv ? ` <span class="detail-sub">${t.div}</span>` : ""}</td>
@@ -832,7 +832,7 @@ function oddsTableHtml(rows, rankOf, withDiv) {
       <td class="num" data-sort="${t.pts_mean}">${Math.round(t.pts_mean)} <span class="detail-sub">${t.pts_p10}&ndash;${t.pts_p90}</span></td>
       ${oddsCell(t.playoffs, "79,191,133")}${oddsCell(t.division, "90,163,214")}${oddsCell(t.pres, "232,184,108")}
       <td class="num">${t.rem}</td>
-      <td class="num" data-sort="${t.sos === null ? "" : t.sos}">${t.sos === null ? "&ndash;" : sosAll[t.abbrev] <= 8 ? '<span class="pos">Easier</span>' : sosAll[t.abbrev] > 24 ? '<span class="neg">Harder</span>' : "Average"}</td></tr>`).join("");
+      <td class="num" data-sort="${t.sos_pts === undefined ? "" : t.sos_pts}" title="${t.sos_pts === undefined ? "" : `The remaining schedule is worth ${t.sos_pts > 0 ? "+" : ""}${t.sos_pts.toFixed(1)} standings points against an average schedule: ${ordinal(sosAll[t.abbrev])} easiest of ${Object.keys(sosAll).length}`}">${t.sos_pts === undefined ? "&ndash;" : `<span class="${t.sos_pts >= 0.3 ? "pos" : t.sos_pts <= -0.3 ? "neg" : ""}">${t.sos_pts > 0 ? "+" : t.sos_pts < 0 ? "&minus;" : ""}${Math.abs(t.sos_pts).toFixed(1)}</span> <span class="detail-sub">#${sosAll[t.abbrev]}</span>`}</td></tr>`).join("");
   return `<div class="table-scroll"><table class="auto-sort odds-table"><thead><tr>${head.map((h, i) => `<th class="${i ? "num" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function oddsHtml(state, data) {
@@ -843,7 +843,7 @@ function oddsHtml(state, data) {
   const q = (state.filter || "").trim().toLowerCase();
   const all = data.teams.slice().sort((a, b) => b.playoffs - a.playoffs || b.pts - a.pts);
   const rank = {}; all.forEach((t, i) => { rank[t.abbrev] = i + 1; });
-  const sosOrder = data.teams.filter(t => t.sos !== null).sort((a, b) => a.sos - b.sos), sos = {}; sosOrder.forEach((t, i) => { sos[t.abbrev] = i + 1; });   // 1 = the easiest remaining schedule
+  const sosOrder = data.teams.filter(t => t.sos_pts !== undefined).sort((a, b) => b.sos_pts - a.sos_pts), sos = {}; sosOrder.forEach((t, i) => { sos[t.abbrev] = i + 1; });   // 1 = the easiest remaining schedule
   const info = { rank, sos };
   const match = (t) => !q || (t.abbrev + " " + teamName(t.abbrev)).toLowerCase().includes(q);
   const view = state.view || "league";
@@ -853,7 +853,7 @@ function oddsHtml(state, data) {
   if (view === "league") body = oddsTableHtml(all.filter(match), info, true);
   else if (view === "conference") body = ["Eastern", "Western"].map(c => `<div class="detail-h3">${c} Conference <span class="detail-sub">about ${data.cutoff[c]} points has been the cutoff in the simulations</span></div>${oddsTableHtml(all.filter(t => t.conf === c && match(t)), info, true)}`).join("");
   else body = ["Atlantic", "Metropolitan", "Central", "Pacific"].map(d => `<div class="detail-h3">${d} Division</div>${oddsTableHtml(all.filter(t => t.div === d && match(t)), info, false)}`).join("");
-  const note = `<div class="panel-caption"><strong>How it works.</strong> The rest of the schedule (${data.games_left} games) is played out ${data.sims.toLocaleString()} times. Each game uses the same model as the game predictions: both teams' recent expected goals (older games count less, and last season counts too), a small home edge, and a penalty for the road team on the second night of a back-to-back; a tie after regulation is an overtime or shootout coin flip. Standings and tiebreakers come from the NHL; the top three in each division and the next two in the conference make the playoffs. Ties are broken by points, regulation wins, regulation-plus-overtime wins, then a coin flip, so the NHL's later tiebreakers (head to head and goal differential) are not modeled. Proj. PTS is the average final total, with the range the middle 80% of outcomes. Schedule compares the opponents each team still has to play: easier is the easiest quarter of the league. It doesn't know injuries, trades or who starts in goal, and it treats a team's strength as fixed for the rest of the season. Updated ${data.standings_date}.</div>`;
+  const note = `<div class="panel-caption"><strong>How it works.</strong> The rest of the schedule (${data.games_left} games) is played out ${data.sims.toLocaleString()} times. Each game uses the same model as the game predictions: both teams' recent expected goals (older games count less, and last season counts too), a small home edge, and a penalty for the road team on the second night of a back-to-back; a tie after regulation is an overtime or shootout coin flip. Standings and tiebreakers come from the NHL; the top three in each division and the next two in the conference make the playoffs. Ties are broken by points, regulation wins, regulation-plus-overtime wins, then a coin flip, so the NHL's later tiebreakers (head to head and goal differential) are not modeled. Proj. PTS is the average final total, with the range the middle 80% of outcomes. Schedule is what the games each team has left are worth in standings points compared with playing the same games, at the same places, against an average team: +1.0 means the remaining opponents are worth about one extra point, &minus;1.0 about one fewer. The number after it ranks the schedules, 1 being the easiest. The differences are small because NHL schedules are close to even. It doesn't know injuries, trades or who starts in goal, and it treats a team's strength as fixed for the rest of the season. Updated ${data.standings_date}.</div>`;
   return `${chips}${body}${note}`;
 }
 // a team's value for a stat plus a league-rank pill (green for the top quarter, red for the bottom quarter)
@@ -953,23 +953,22 @@ function teamQualified(data) {
   (data.roster || []).forEach(r => { posOf[String(r.player_id)] = r.position; });
   const minGp = Math.max(5, Math.round(0.25 * (data.games_played || 0)));
   const everyone = Object.entries(data.players).map(([pid, p]) => ({ pid, p: Object.assign({}, p, { summary: teamSummary(p, data.abbrev) }), pos: posOf[pid] })).filter(x => x.pos && x.pos !== "G" && x.p.summary.gp > 0);
-  return { players: everyone.filter(x => x.p.summary.gp >= minGp), everyone, minGp };
+  return { players: everyone, everyone, minGp };   // no games minimum on a team page: everyone who played is ranked
 }
 function teamSkaterTablesHtml(data) {
   const { everyone, minGp } = teamQualified(data);
-  // every skater who played for the team, none left out for a short stay: the regulars (minGp+ games) ranked by Avg Adjusted first, then the rest by games played
+  // every skater who played for the team, ranked by Avg Adjusted with no games minimum (the GP column shows how much each rank rests on)
   const playerTable = (list) => {
-    const sorted = list.filter(x => x.p.summary.gp >= minGp).sort((a, b) => b.p.summary.avg_adjusted - a.p.summary.avg_adjusted)
-      .concat(list.filter(x => x.p.summary.gp < minGp).sort((a, b) => b.p.summary.gp - a.p.summary.gp || b.p.summary.avg_adjusted - a.p.summary.avg_adjusted));
+    const sorted = list.slice().sort((a, b) => b.p.summary.avg_adjusted - a.p.summary.avg_adjusted || b.p.summary.gp - a.p.summary.gp);
     return statTable(
       [{ label: "#", num: true }, { label: "Player" }, { label: "Pos" }, ...["GP", "G", "A1", "A2", "P", "TOI / GP", "xGF%", "Avg Game Score", "Avg Adjusted"].map(label => ({ label, num: true }))],
       sorted.map(({ pid, p, pos }, i) => { const s = p.summary;
-        return [s.gp >= minGp ? i + 1 : "&ndash;", playerLink(pid, data.abbrev, p.name), pos, s.gp, s.goals, s.a1, s.a2, s.points, s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;", pctOf(s.xgf, s.xga), scoreCell(s.avg_raw), gsCell(s.avg_adjusted, "avg", true)]; }));
+        return [i + 1, playerLink(pid, data.abbrev, p.name), pos, s.gp, s.goals, s.a1, s.a2, s.points, s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;", pctOf(s.xgf, s.xga), scoreCell(s.avg_raw), gsCell(s.avg_adjusted, "avg", true)]; }));
   };
   const fwd = everyone.filter(x => x.pos !== "D"), def = everyone.filter(x => x.pos === "D");
-  return `<div class="detail-h3">Forwards <span class="detail-sub">${fwd.length} who played &middot; ranked by Avg Adjusted among those with ${minGp}+ games</span></div>${fwd.length ? playerTable(fwd) : '<div class="empty">No forwards yet.</div>'}
-    <div class="detail-h3">Defensemen <span class="detail-sub">${def.length} who played &middot; ranked by Avg Adjusted among those with ${minGp}+ games</span></div>${def.length ? playerTable(def) : '<div class="empty">No defensemen yet.</div>'}
-    <div class="panel-caption">Every skater who played for ${data.abbrev} is listed. Those with ${minGp} or more games are ranked by season-average Adjusted Game Score, so a call-up with two games doesn't top the list; everyone else follows, most games first, with a dash for the rank. A player traded this season shows only his games with ${data.abbrev} here. Click any column to sort.</div>`;
+  return `<div class="detail-h3">Forwards <span class="detail-sub">${fwd.length} who played &middot; ranked by Avg Adjusted</span></div>${fwd.length ? playerTable(fwd) : '<div class="empty">No forwards yet.</div>'}
+    <div class="detail-h3">Defensemen <span class="detail-sub">${def.length} who played &middot; ranked by Avg Adjusted</span></div>${def.length ? playerTable(def) : '<div class="empty">No defensemen yet.</div>'}
+    <div class="panel-caption">Every skater who played for ${data.abbrev} is ranked by season-average Adjusted Game Score, with no games minimum, so someone with a few games can rank high or low on a small sample: check the GP column. A player traded this season shows only his games with ${data.abbrev} here. Click any column to sort.</div>`;
 }
 function teamUnitRankHtml(data) {
   const unitTable = (type) => {
