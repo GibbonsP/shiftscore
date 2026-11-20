@@ -901,31 +901,30 @@ function teamPlayerBoardsHtml(data) {
 // within-team rankings: forwards, defensemen, forward lines and defense pairs. Players rank by season-average Adjusted Game
 // Score with a games-played minimum (a call-up with two games shouldn't top a list); lines and pairs rank by Unit Score
 // per 60 minutes together, with a minimum of 30 minutes (10 if the team doesn't have three that qualify yet).
+// a player's numbers with this team: for someone traded this season, the games he played for it (his page combines his teams)
+const teamSummary = (p, abbrev) => (p.by_team && p.by_team[abbrev]) || p.summary;
 function teamQualified(data) {
   const posOf = {};
   (data.roster || []).forEach(r => { posOf[String(r.player_id)] = r.position; });
   const minGp = Math.max(5, Math.round(0.25 * (data.games_played || 0)));
-  const players = Object.entries(data.players).map(([pid, p]) => ({ pid, p, pos: posOf[pid] })).filter(x => x.pos && x.pos !== "G" && x.p.summary.gp >= minGp);
-  return { players, minGp };
+  const everyone = Object.entries(data.players).map(([pid, p]) => ({ pid, p: Object.assign({}, p, { summary: teamSummary(p, data.abbrev) }), pos: posOf[pid] })).filter(x => x.pos && x.pos !== "G" && x.p.summary.gp > 0);
+  return { players: everyone.filter(x => x.p.summary.gp >= minGp), everyone, minGp };
 }
 function teamSkaterTablesHtml(data) {
-  const { players, minGp } = teamQualified(data);
+  const { everyone, minGp } = teamQualified(data);
+  // every skater who played for the team, none left out for a short stay: the regulars (minGp+ games) ranked by Avg Adjusted first, then the rest by games played
   const playerTable = (list) => {
-    const sorted = list.slice().sort((a, b) => b.p.summary.avg_adjusted - a.p.summary.avg_adjusted);
+    const sorted = list.filter(x => x.p.summary.gp >= minGp).sort((a, b) => b.p.summary.avg_adjusted - a.p.summary.avg_adjusted)
+      .concat(list.filter(x => x.p.summary.gp < minGp).sort((a, b) => b.p.summary.gp - a.p.summary.gp || b.p.summary.avg_adjusted - a.p.summary.avg_adjusted));
     return statTable(
       [{ label: "#", num: true }, { label: "Player" }, { label: "Pos" }, ...["GP", "G", "A1", "A2", "P", "TOI / GP", "xGF%", "Avg Game Score", "Avg Adjusted"].map(label => ({ label, num: true }))],
       sorted.map(({ pid, p, pos }, i) => { const s = p.summary;
-        return [i + 1, playerLink(pid, data.abbrev, p.name), pos, s.gp, s.goals, s.a1, s.a2, s.points, s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;", pctOf(s.xgf, s.xga), scoreCell(s.avg_raw), gsCell(s.avg_adjusted, "avg", true)]; }));
+        return [s.gp >= minGp ? i + 1 : "&ndash;", playerLink(pid, data.abbrev, p.name), pos, s.gp, s.goals, s.a1, s.a2, s.points, s.gp ? toiStr(Math.round(s.toi / s.gp)) : "&ndash;", pctOf(s.xgf, s.xga), scoreCell(s.avg_raw), gsCell(s.avg_adjusted, "avg", true)]; }));
   };
-  const fwd = players.filter(x => x.pos !== "D"), def = players.filter(x => x.pos === "D");
-  const everyone = statTable(
-    [{ label: "Player" }, { label: "Pos" }, { label: "GP", num: true }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Avg Adj", num: true }],
-    data.roster.map(p => [playerLink(p.player_id, data.abbrev, p.name), p.position, p.gp, p.goals, p.a1, p.a2, gsCell(p.avg_adjusted, "avg", true)])
-  );
-  return `<div class="detail-h3">Forwards <span class="detail-sub">${minGp}+ games, by Avg Adjusted</span></div>${fwd.length ? playerTable(fwd) : '<div class="empty">No forwards with enough games yet.</div>'}
-    <div class="detail-h3">Defensemen <span class="detail-sub">${minGp}+ games, by Avg Adjusted</span></div>${def.length ? playerTable(def) : '<div class="empty">No defensemen with enough games yet.</div>'}
-    <details class="team-all"><summary>Everyone who played for ${data.abbrev} (${data.roster.length})</summary>${everyone}</details>
-    <div class="panel-caption">Ranked by season-average Adjusted Game Score, with a games-played minimum so a call-up with two games doesn't top the list.</div>`;
+  const fwd = everyone.filter(x => x.pos !== "D"), def = everyone.filter(x => x.pos === "D");
+  return `<div class="detail-h3">Forwards <span class="detail-sub">${fwd.length} who played &middot; ranked by Avg Adjusted among those with ${minGp}+ games</span></div>${fwd.length ? playerTable(fwd) : '<div class="empty">No forwards yet.</div>'}
+    <div class="detail-h3">Defensemen <span class="detail-sub">${def.length} who played &middot; ranked by Avg Adjusted among those with ${minGp}+ games</span></div>${def.length ? playerTable(def) : '<div class="empty">No defensemen yet.</div>'}
+    <div class="panel-caption">Every skater who played for ${data.abbrev} is listed. Those with ${minGp} or more games are ranked by season-average Adjusted Game Score, so a call-up with two games doesn't top the list; everyone else follows, most games first, with a dash for the rank. A player traded this season shows only his games with ${data.abbrev} here. Click any column to sort.</div>`;
 }
 function teamUnitRankHtml(data) {
   const unitTable = (type) => {
