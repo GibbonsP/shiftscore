@@ -551,8 +551,15 @@ def attach_game_logs(team_data: dict, games: list[dict]) -> None:
             # season shot danger on the power play (this team's shots for) and the penalty kill (the other team's power-play shots against it):
             # shots on goal by band, goals, expected goals and time
             sp = shard.setdefault("special", {"pp": [0, 0, 0, 0, 0.0, 0], "pk": [0, 0, 0, 0, 0.0, 0]})
+            # goals and expected goals by band (high, medium, low), kept as a seventh item so older readers still work
             for kind, cells in (("pp", g["team_cells"][side]), ("pk", g["team_cells"][opp])):
                 a = sp[kind]
+                if len(a) < 7:
+                    a.append([0, 0, 0, 0.0, 0.0, 0.0])
+                for i, f in enumerate(("hdg", "mdg", "ldg")):
+                    a[6][i] += int(get(cells, (2,), f))
+                for i, f in enumerate(("hdx", "mdx", "ldx")):
+                    a[6][3 + i] += get(cells, (2,), f)
                 a[0] += int(get(cells, (2,), "hdc")); a[1] += int(get(cells, (2,), "mdc")); a[2] += int(get(cells, (2,), "ldc"))
                 a[3] += int(get(cells, (2,), "goals")); a[4] += get(cells, (2,), "xgf"); a[5] += int(get(cells, (2,), "toi"))
             row = next((r for r in shard["schedule"] if r["gid"] == g["id"]), None)

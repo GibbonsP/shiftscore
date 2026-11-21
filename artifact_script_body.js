@@ -1085,11 +1085,14 @@ function teamGameLogHtml(data) {
 function teamSpecialDangerHtml(data) {
   const sp = data.special;
   if (!sp) return "";
-  const row = (name, a, label) => ({ name: `${name}<small class="dz-sub">${toiStr(a[5])} on ice</small>`,
-    cells: [[a[0], ""], [a[1], ""], [a[2], ""], [a[0] + a[1] + a[2], `${a[3]} G &middot; ${a[4].toFixed(1)} xG`]] });
+  const row = (name, a, against) => ({ name: `${name}<small class="dz-sub">${toiStr(a[5])} on ice</small>`,
+    cells: [0, 1, 2].map(i => {
+      const b = a[6]; // goals and expected goals by band: [g high, g mid, g low, xg high, xg mid, xg low]
+      return b ? [a[i], `${b[i]} G &middot; ${b[3 + i].toFixed(2)} xG`, bandShade(b[i], b[3 + i]) * (against ? -1 : 1)] : [a[i], ""];
+    }).concat([[a[0] + a[1] + a[2], `${a[3]} G &middot; ${a[4].toFixed(2)} xG`, bandShade(a[3], a[4]) * (against ? -1 : 1)]]) });
   return `<div class="detail-h3">Shot danger on special teams</div>
-    ${dangerCardHtml([row("Power play", sp.pp), row("Penalty kill", sp.pk)], "Total")}
-    <div class="panel-caption">Shots on goal by danger band. Power play counts the team's own shots while it had the man advantage; penalty kill counts the shots it allowed while shorthanded. The small figures under each total are goals and expected goals from those shots. Unit by unit is below.</div>`;
+    ${dangerCardHtml([row("Power play", sp.pp, false), row("Penalty kill", sp.pk, true)], "Total")}
+    <div class="panel-caption">Shots on goal by danger band. Power play counts the team's own shots while it had the man advantage; penalty kill counts the shots it allowed while shorthanded. The small figures under each count are the goals and expected goals from those shots, with the gap between them beside it; shaded green when the result went the team's way by more than the shots were worth, red when against. Unit by unit is below.</div>`;
 }
 function teamDetailHtml(data) {
   const state = specialState.teams;
@@ -2683,7 +2686,15 @@ function buildPage() {
     btn.textContent = tab.label;
     btn.setAttribute("role", "tab");
     btn.setAttribute("aria-selected", "false");
-    btn.addEventListener("click", () => selectTab(tab.key));
+    // a tab button always opens that tab's list: a unit, team or player page left open on it earlier (before you went Back or followed a link elsewhere)
+    // must not come back when you click the tab
+    btn.addEventListener("click", () => {
+      const st = specialState[tab.key];
+      if (tab.special && st && st.mode && st.mode !== "list") {
+        st.mode = "list"; replaceNextSync = false;
+        selectTab(tab.key); renderSpecialPanel(tab.key);
+      } else selectTab(tab.key);
+    });
     btn.id = "tabbtn-" + tab.key;
     tabsEl.appendChild(btn);
 

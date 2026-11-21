@@ -40,7 +40,7 @@ PLAYER_FIELDS = ["toi", "g", "a1", "a2", "sog", "hits", "blk", "tk", "gv", "pim"
                  "ihx", "imx", "ilx",                   # ...and the chance each shot on goal had of scoring, added up (expected goals)
                  "gsc"]                                 # Game Score points earned in the cell (so the page can sum any filter without knowing the formula)
 TEAM_FIELDS = ["toi", "goals", "sog", "attempts", "xgf", "hdc", "hits", "blocks", "tk", "gv", "pim", "fow", "fol",
-               "mdc", "ldc"]
+               "mdc", "ldc", "hdg", "mdg", "ldg", "hdx", "mdx", "ldx"]   # goals and expected goals from shots on goal by danger band, last
 # per goalie: overall, then shots faced / goals allowed / expected goals against in each danger band
 GOALIE_FIELDS = ["toi", "sf", "ga", "xga",
                  "sfh", "gah", "xgah", "sfm", "gam", "xgam", "sfl", "gal", "xgal"]
@@ -200,6 +200,9 @@ def compute_game_slices(conn, game_id: int, pipeline) -> dict:
                     if etype == "goal":
                         bump_player(shooter, {"h": "ihg", "m": "img", "l": "ilg"}[band])
                     bump_team(shooter_team, {"h": "hdc", "m": "mdc", "l": "ldc"}[band])
+                    if etype == "goal":
+                        bump_team(shooter_team, {"h": "hdg", "m": "mdg", "l": "ldg"}[band])
+                    bump_team(shooter_team, {"h": "hdx", "m": "mdx", "l": "ldx"}[band], float(dp) if dp is not None else xg)
             if etype == "blocked-shot" and d.get("blockingPlayerId"):
                 blocker = d["blockingPlayerId"]
                 if bump_player(blocker, "blk") is not None:
