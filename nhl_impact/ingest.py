@@ -86,6 +86,16 @@ def ingest_game(conn, game_id: int, require_complete: bool = False) -> None:
         )
 
     shift_rows_raw = api.get_shifts(game_id)
+    if require_complete and not shift_rows_raw:
+        # a game that just ended often has no shift chart yet; storing it now would publish half-empty cards and wait hours for a retry, so refuse
+        # (the game stays "new" and is tried again on the next run). After six hours it is taken as it is: some games never get a chart.
+        started = pbp.get("startTimeUTC")
+        if started:
+            from datetime import datetime, timezone
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(started.replace("Z", "+00:00"))).total_seconds()
+            if age < 6 * 3600:
+                conn.rollback()
+                raise ValueError(f"no shift chart for game {game_id} yet")
     shift_rows = []
     for s in shift_rows_raw:
         start_sec = mmss_to_sec(s["startTime"])

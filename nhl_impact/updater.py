@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from . import api, db, goalie_stats, impact, ingest, matchups, units, xg_model, xg_stats
 from .live import load_score_factors
 
-SETTLE_SEC = int(3.5 * 3600)   # a game ends about 2.5-3 hours after the puck drops and the shift chart follows; games still missing shifts are retried
+SETTLE_SEC = int(2.5 * 3600)   # earliest a game is looked at: most end 2.4-3.2 hours after the puck drops, and a game is only taken once the NHL calls it final AND has posted its shift chart (ingest refuses a young game without shifts, so it is simply tried again on the next run, every 10 minutes)
 REFRESH_SEC = 24 * 3600
 NO_SHIFTS_RETRY_SEC = 60 * 24 * 3600   # keep asking for a missing shift chart for two months (it can be posted late, and the watcher may have been off)
 NO_SHIFTS_RETRY_EVERY = 3 * 3600       # but no more than once every three hours per game
