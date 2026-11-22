@@ -64,16 +64,18 @@ def season_id(game_id: int) -> str:
 
 
 def on_site(site: str, game: dict, cache: dict) -> bool:
-    """True when the site's data file for the game's home team has this game in it (that is, the update job has processed and deployed it)."""
+    """True when the site's data file for the game's home team has this game in it (that is, the update job has processed and deployed it) and the
+    game has its shift chart: without one the tables, bars and lines are empty, so those games wait until the chart arrives and a later update fills it in."""
     key = (season_id(game["id"]), game["home"])
     if key not in cache:
         try:
             r = requests.get(f"{site}/data/{key[0]}/games/{key[1]}.json", params={"t": int(datetime.now().timestamp())}, timeout=90)
-            cache[key] = set(r.json().keys()) if r.status_code == 200 else set()
+            cache[key] = r.json() if r.status_code == 200 else {}
         except Exception as e:
             print(f"  couldn't read {key}: {e}", flush=True)
-            cache[key] = set()
-    return str(game["id"]) in cache[key]
+            cache[key] = {}
+    g = cache[key].get(str(game["id"]))
+    return g is not None and not (isinstance(g, dict) and g.get("ns"))
 
 
 def card_keys_for(sub_teams: set[str], game: dict) -> list[str]:
