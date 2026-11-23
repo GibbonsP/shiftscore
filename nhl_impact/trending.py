@@ -3,7 +3,7 @@
 Form is the recent stretch against the same player's (or unit's) earlier games in the season, in the site's own scores:
   * skaters: average Adjusted Game Score, last 5 games against everything before
   * goalies: goals saved above expected per start, last 4 starts against everything before
-  * lines and pairs: average Unit Score, last 5 games against everything before
+  * forward lines and D pairs (listed separately): average Unit Score, last 5 games against everything before
   * power-play and penalty-kill units: the same, by Unit Score
 A player or unit has to have enough earlier games for the comparison to mean something and has to be playing now (a game in his team's
 last three), so an injured player's old hot streak doesn't show up. Each list is the five biggest rises and the five biggest falls.
@@ -75,7 +75,7 @@ def build(team_data: dict, units: list, players_index: list) -> dict:
                 pos = (info.get(int(pid)) or {}).get("pos", "")
                 skaters.append(_item({"id": int(pid), "name": p["name"], "team": team, "pos": pos}, *s))
 
-    lines, special = [], []
+    lines, pairs, special = [], [], []
     for u in units:
         log = sorted(u["log"], key=lambda g: g["date"])
         st = u["type"] in ("pp", "pk")
@@ -92,7 +92,7 @@ def build(team_data: dict, units: list, players_index: list) -> dict:
         if not s or not active(u["team"], log[-1]["date"]):
             continue
         item = _item({"key": u["key"], "team": u["team"], "type": u["type"], "players": [p["name"] for p in u["players"]]}, *s)
-        (special if st else lines).append(item)
+        (special if st else lines if u["type"] == "line" else pairs).append(item)
 
-    return {"skaters": _pick(skaters), "goalies": _pick(goalies), "units": _pick(lines), "special": _pick(special),
+    return {"skaters": _pick(skaters), "goalies": _pick(goalies), "lines": _pick(lines), "pairs": _pick(pairs), "special": _pick(special),
             "rules": {"skaters": SKATER_RECENT, "goalies": GOALIE_RECENT, "units": UNIT_RECENT}}

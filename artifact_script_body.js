@@ -1855,7 +1855,8 @@ function trendingHtml() {
       <div><div class="trend-dir down">Trending down</div><div class="lead-list">${g.down.map(render).join("") || '<div class="empty">None right now.</div>'}</div></div></div>` : "";
   const html = block("Skaters", `average Adjusted Game Score, last ${R.skaters || 5} games against his earlier games`, t.skaters, person)
     + block("Goalies", `goals saved above expected per start, last ${R.goalies || 4} starts against his earlier starts`, t.goalies, person)
-    + block("Lines and pairs", `average Unit Score, last ${R.units || 5} games against the unit's earlier games`, t.units, unitRow)
+    + block("Forward lines", `average Unit Score, last ${R.units || 5} games against the line's earlier games`, t.lines || { up: [], down: [] }, unitRow)
+    + block("D pairs", `average Unit Score, last ${R.units || 5} games against the pair's earlier games`, t.pairs || { up: [], down: [] }, unitRow)
     + block("Special teams", `power-play and penalty-kill units, average Unit Score, last ${R.units || 5} games against earlier games`, t.special, unitRow);
   return html ? `<div class="detail-h3 home-results-h">Trending</div>${html}<div class="panel-caption">Only players and units who are playing now, with at least eight earlier games to compare against; the big number is the change, and the small one shows the earlier average and then the recent one.</div>` : "";
 }
