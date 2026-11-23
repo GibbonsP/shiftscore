@@ -1818,7 +1818,7 @@ function trendingHtml() {
   const R = t.rules || {};
   const row = (i, who, link, extra) => `<a class="lead" ${link} role="button" tabindex="0">${who}
     <span class="lead-who"><span class="lead-name">${extra.name}</span><span class="lead-team">${logoSpan(i.team)}${i.team}${extra.sub ? " &middot; " + extra.sub : ""}</span></span>
-    <span class="lead-val">${scoreCell(i.delta)}<small>${signed2(i.recent)} now &middot; ${signed2(i.prior)} before</small></span></a>`;
+    <span class="lead-val">${scoreCell(i.delta)}<small>${signed2(i.prior)} &rarr; ${signed2(i.recent)}</small></span></a>`;
   const person = (i, unit) => row(i, avatarSpan(i.id, i.name), `data-open-player="${i.id}" data-player-team="${i.team}"`, { name: escapeHtml(i.name), sub: i.pos || "" });
   const unitRow = (i) => {
     const names = i.players.map(n => n.split(" ").slice(-1)[0]);
@@ -1832,7 +1832,7 @@ function trendingHtml() {
     + block("Goalies", `goals saved above expected per start, last ${R.goalies || 4} starts against his earlier starts`, t.goalies, person)
     + block("Lines and pairs", `average Unit Score, last ${R.units || 5} games against the unit's earlier games`, t.units, unitRow)
     + block("Special teams", `power-play and penalty-kill units, average Unit Score, last ${R.units || 5} games against earlier games`, t.special, unitRow);
-  return html ? `<div class="detail-h3 home-results-h">Trending</div>${html}<div class="panel-caption">Only players and units who are playing now, with at least eight earlier games to compare against; the change is the recent average minus the earlier one.</div>` : "";
+  return html ? `<div class="detail-h3 home-results-h">Trending</div>${html}<div class="panel-caption">Only players and units who are playing now, with at least eight earlier games to compare against; the big number is the change, and the small one shows the earlier average and then the recent one.</div>` : "";
 }
 // The email signup box (only on the hosted site, and only once the signup functions are set up: build_site.py turns it on with EMAIL_SIGNUP=1).
 // The visitor picks teams and gives an address; /api/subscribe sends a confirmation email, and nothing else is sent before it is clicked.
