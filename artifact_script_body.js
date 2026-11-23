@@ -486,6 +486,31 @@ function mainUnits(group, type) {
   return group.filter(u => u.summary.toi_sec >= Math.max(rule.floor, rule.share * total))
     .sort((a, b) => b.summary.toi_sec - a.summary.toi_sec).slice(0, rule.top);
 }
+// The team page's Units section: one table each for forward lines and D pairs (lines and pairs with at least 10:00 together on the season), each with a
+// slider for a higher minimum ice time and every column sortable, Unit Score included. A link brings in every line, pair and special-teams unit
+// the team has used, short-lived combinations too, with the minimum back at zero.
+let teamUnitsData = null;
+const TEAM_UNIT_STEP = { line: 60, pair: 60, pp: 30, pk: 30, ev4: 30, ev3: 30 };
+function teamUnitRows(data, t, min) {
+  const all = (data.units || []).filter(u => u.type === t), shown = all.filter(u => u.summary.toi_sec >= min).sort((a, b) => b.summary.toi_sec - a.summary.toi_sec);
+  const tbl = unitSummaryRows(shown, data.abbrev);
+  return { all, shown, html: shown.length > 12 ? `<div class="unit-scroll">${tbl}</div><div class="scroll-hint">${shown.length} units &middot; scroll the table to see them all</div>` : shown.length ? tbl : '<div class="empty">No units with that much ice time.</div>' };
+}
+function teamUnitsSectionHtml(data) {
+  teamUnitsData = data;
+  const st = specialState.teams, every = !!data.allUnits;
+  const out = (every ? ["line", "pair", "pp", "pk", "ev4", "ev3"] : ["line", "pair"]).map(t => {
+    const min = st.unitMin[t] || 0, r = teamUnitRows(data, t, min);
+    if (!r.all.length) return "";
+    const step = TEAM_UNIT_STEP[t], max = Math.ceil(Math.max(...r.all.map(u => u.summary.toi_sec)) / step) * step;
+    return `<div class="detail-h3">${UNIT_LABELS[t]}</div>${minSliderHtml("team|" + t, "Minimum ice time together", max, step, min, r.shown.length, r.all.length)}
+      <div class="slide-table" data-slide="team|${t}">${r.html}</div>`;
+  }).join("");
+  const link = every
+    ? `<div class="panel-caption"><button class="back-btn" data-main-units="1">Back to the main lines and pairs</button></div>`
+    : `<div class="panel-caption"><button class="back-btn" data-all-units="1">See every line, pair and special-teams unit for ${data.abbrev}</button> <span class="detail-sub">short-lived combinations included</span></div>`;
+  return out + link;
+}
 function unitSectionsHtml(units, abbrev, more, everything, types) {
   const moreBtn = more ? `<div class="panel-caption"><button class="back-btn" data-all-units="1">Show every unit, including short-lived combinations</button></div>` : "";
   return (types || ["line", "pair", "pp", "pk", "ev4", "ev3"]).map(t => {
@@ -1113,8 +1138,7 @@ function teamDetailHtml(data) {
     overview: () => teamOverviewHtml(data),
     skaters: () => teamSkaterTablesHtml(data),
     goalies: () => `<div class="detail-h3">Goalies</div>${goalies}`,
-    // one table each for forward lines and D pairs holding every unit (sort any column, Unit Score included); the short-lived combinations load with the section
-    units: () => teamUnitRankHtml(data) + unitSectionsHtml(data.units, data.abbrev, false, true, ["line", "pair"]),
+    units: () => teamUnitRankHtml(data) + teamUnitsSectionHtml(data),
     special: () => teamSpecialDangerHtml(data) + (unitSectionsHtml(data.units, data.abbrev, false, !!data.allUnits, ["pp", "pk", "ev4", "ev3"]) || '<div class="empty">No special-teams units yet.</div>'),
     leaders: () => teamPlayerBoardsHtml(data),
     schedule: () => teamGameLogHtml(data),
@@ -1391,9 +1415,9 @@ function playerDetailHtml(playerId, teamData, sec, tm) {
       ["Shots faced", "Goals allowed", "Sv%", "xGA", "GSAx"].map((label, k) => [label, ...cols.map(c => cell(c, k)), cell(tot, k)]), { sort: false });
   })() : "";
   const log = statTable(
-    [{ label: "Date" }, { label: "Team" }, { label: "Opp" }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
+    [{ label: "Date" }, { label: "Team" }, { label: "Opp" }, { label: "TOI", num: true }, { label: "G", num: true }, { label: "A1", num: true }, { label: "A2", num: true }, { label: "Raw", num: true },
      { label: "QoC", num: true }, { label: "QoT", num: true }, { label: "Adjusted", num: true }, { label: "ixG", num: true }, { label: "Line / pair" }],
-    p.game_log.map(g => [gameLink(g.gid, g.home, g.date), teamLink(g.team), g.opp ? `<span class="detail-sub">${escapeHtml(g.loc || "")}</span> ${teamLink(g.opp)}` : "&ndash;", g.goals, g.a1, g.a2, gsCell(g.raw, gsKind(posHere, false), false),
+    p.game_log.map(g => [gameLink(g.gid, g.home, g.date), teamLink(g.team), g.opp ? `<span class="detail-sub">${escapeHtml(g.loc || "")}</span> ${teamLink(g.opp)}` : "&ndash;", g.toi ? toiStr(g.toi) : "&ndash;", g.goals, g.a1, g.a2, gsCell(g.raw, gsKind(posHere, false), false),
       g.qoc, g.qot, gsCell(g.adjusted, "adj", true), g.ixg,
       // the line or pair he spent the most time with that night, graded against the same slot in every game since 2024-25
       g.u ? `<a class="row-link" data-open-unit="${g.u[2]}" data-unit-team="${g.team}">${g.u[0]}</a> ${unitGradeHtml(g.u[1], g.u[0])} <span class="detail-sub">${signed2(g.u[1])}</span>` : "&ndash;"])
@@ -1718,10 +1742,10 @@ function gamesListHtml(filterText) {
 // doesn't lose where you were
 function freshState() {
   return {
-    teams: { mode: "list", abbrev: null, sec: "overview", unitKey: null, filter: "", sort: "pts", dir: "desc", view: "list", toi: {} },
-    skaters: { mode: "list", playerId: null, teamAbbrev: null, sec: "overview", filter: "", pos: "all", sort: { k: "avg_adj", d: -1 } },
+    teams: { mode: "list", abbrev: null, sec: "overview", unitKey: null, filter: "", sort: "pts", dir: "desc", view: "list", toi: {}, unitMin: {} },
+    skaters: { mode: "list", playerId: null, teamAbbrev: null, sec: "overview", filter: "", pos: "all", minToi: 0, sort: { k: "avg_adj", d: -1 } },
     goalies: { mode: "list", playerId: null, teamAbbrev: null, sec: "overview", filter: "", sort: { k: "gsax", d: -1 } },
-    units: { mode: "list", filter: "", view: "line", sort: { k: "toi_sec", d: -1 } },
+    units: { mode: "list", filter: "", view: "line", minToi: {}, sort: { k: "toi_sec", d: -1 } },
     leaderboards: { mode: "list", more: {} },
     games: { mode: "list", gameId: null, home: null, filter: "" },
     power: { mode: "list", filter: "", view: "values", sort: { k: "power", d: -1 } },
@@ -2171,7 +2195,7 @@ async function renderSpecialPanel(tabKey) {
     if (tabKey === "teams") {
       let data = await fetchTeam(state.abbrev);
       // a unit outside the main list (or "show every unit") needs the short-lived units too
-      if (state.allUnits || (state.mode === "detail" && state.sec === "units") || (state.mode === "unit" && !data.units.some(u => u.key === state.unitKey))) data = await withAllUnits(data);
+      if (state.allUnits || (state.mode === "unit" && !data.units.some(u => u.key === state.unitKey))) data = await withAllUnits(data);
       html = state.mode === "unit" ? unitDetailHtml(data, state.unitKey) : teamDetailHtml(data);
     } else if (tabKey === "skaters" || tabKey === "goalies") {
       let td = await fetchTeam(state.teamAbbrev);
@@ -2377,13 +2401,25 @@ const SKATER_COLS = [
   { k: "avg_raw", label: "Avg Raw", num: true, get: p => p.avg_raw, cell: p => num2(p.avg_raw) },
   { k: "avg_adj", label: "Avg Adjusted", num: true, signed: true, get: p => p.avg_adj, cell: p => (p.avg_adj === null || p.avg_adj === undefined ? "&ndash;" : gsCell(p.avg_adj, "avg", true)) },
 ];
-function skatersTableHtml(state) {
+// a slider that hides everyone (or every unit) with less ice time than the setting, so a sort by score isn't topped by a few shifts of ice time.
+// kind|key says what it controls; the table underneath is redrawn from the state in redrawSlide.
+function minSliderHtml(slide, label, max, step, v, shown, total) {
+  return `<div class="toi-slider"><label>${label}</label>
+    <input type="range" min="0" max="${max}" step="${step}" value="${Math.min(v, max)}" data-min-slider="${slide}" data-step="${step}">
+    <output class="toi-value">${v ? toiStr(v) : "Any"}</output><span class="toi-count">${v ? `Showing ${shown} of ${total}` : `Showing ${total}`}</span></div>`;
+}
+const sliderMax = (rows, field, step) => Math.ceil(Math.max(0, ...rows.map(r => r[field] || 0)) / step) * step;
+function skaterRows(state) {
   const q = (state.filter || "").trim().toLowerCase(), F = new Set(["C", "L", "R"]);
-  const rows = (S().players_index || []).filter(p => p.pos !== "G" && (state.pos === "all" || (state.pos === "f" ? F.has(p.pos) : p.pos === "D"))
+  return (S().players_index || []).filter(p => p.pos !== "G" && (state.pos === "all" || (state.pos === "f" ? F.has(p.pos) : p.pos === "D"))
     && (!q || (p.name + " " + p.team).toLowerCase().includes(q)));
+}
+function skatersTableHtml(state) {
+  const rows = skaterRows(state), shown = rows.filter(p => (p.toi_sec || 0) >= state.minToi);
   const chips = `<div class="chips board-chips" role="group" aria-label="Position">${[["all", "All skaters"], ["f", "Forwards"], ["d", "Defensemen"]].map(([k, label]) =>
     `<button type="button" class="chip" aria-pressed="${state.pos === k}" data-pos-filter="${k}">${label}</button>`).join("")}</div>`;
-  return chips + sortableTable("skaters", SKATER_COLS, rows, state.sort, p => `data-open-player="${p.id}" data-player-team="${p.team}"`) + gsKeyHtml("Avg Adjusted colors");
+  return chips + minSliderHtml("skaters", "Minimum season ice time", sliderMax(rows, "toi_sec", 600), 600, state.minToi, shown.length, rows.length)
+    + `<div class="slide-table" data-slide="skaters">${sortableTable("skaters", SKATER_COLS, shown, state.sort, p => `data-open-player="${p.id}" data-player-team="${p.team}"`)}</div>` + gsKeyHtml("Avg Adjusted colors");
 }
 const GOALIE_COLS = [
   { k: "goalie", label: "Goalie", get: g => g.goalie, cell: g => avatarSpan(g.pid, g.goalie) + escapeHtml(g.goalie) },
@@ -2414,12 +2450,16 @@ const UNIT_COLS = [
   { k: "per60", label: "Per 60", num: true, signed: true, get: u => (u.toi_sec >= UNIT_RATE_MIN_SEC ? u.per60 : null), cell: u => (u.toi_sec >= UNIT_RATE_MIN_SEC ? scoreCell(u.per60) : "&ndash;") },
 ];
 const UNIT_VIEWS = [["line", "Forward lines"], ["pair", "D pairs"], ["pp", "Power play"], ["pk", "Penalty kill"]];
+let leagueUnitsShown = null;   // the league unit lists the Units tab is showing, for its slider
 function unitsTableHtml(state, lu) {
+  leagueUnitsShown = lu;
   const q = (state.filter || "").trim().toLowerCase();
   const rows = (lu[state.view] || []).filter(u => !q || (u.unit + " " + u.team).toLowerCase().includes(q));
+  const min = state.minToi[state.view] || 0, shown = rows.filter(u => (u.toi_sec || 0) >= min), step = state.view === "line" || state.view === "pair" ? 60 : 30;
   const chips = `<div class="chips board-chips" role="group" aria-label="Unit type">${UNIT_VIEWS.map(([k, label]) =>
     `<button type="button" class="chip" aria-pressed="${state.view === k}" data-unit-view="${k}">${label}</button>`).join("")}</div>`;
-  return chips + sortableTable("units", UNIT_COLS, rows, state.sort, u => `data-open-unit="${u.key}" data-unit-team="${u.team}"`);
+  return chips + minSliderHtml("units", "Minimum season ice time together", sliderMax(rows, "toi_sec", step), step, min, shown.length, rows.length)
+    + `<div class="slide-table" data-slide="units">${sortableTable("units", UNIT_COLS, shown, state.sort, u => `data-open-unit="${u.key}" data-unit-team="${u.team}"`)}</div>`;
 }
 
 // --- Leaderboards: the best and worst of the season, side by side. Each section is one ranking, ten rows a side (more on request).
@@ -2502,6 +2542,30 @@ function toiCountText(board, v, filterText, dir) {
   const shown = Math.min(qualified, boardLimit(board.key));
   return v ? `Showing ${shown} of ${qualified} qualifying` : `Showing ${shown}`;
 }
+// the minimum-ice-time sliders on the Skaters tab, the Units tab and a team's Units section: redraw the table under the slider as it moves
+document.addEventListener("input", (ev) => {
+  const r = ev.target.closest && ev.target.closest("input[data-min-slider]");
+  if (!r) return;
+  const slide = r.dataset.minSlider, v = Number(r.value), wrap = r.closest(".toi-slider"), host = document.querySelector(`.slide-table[data-slide="${slide}"]`);
+  if (!host) return;
+  let html, shown, total;
+  if (slide === "skaters") {
+    const st = specialState.skaters; st.minToi = v;
+    const rows = skaterRows(st), keep = rows.filter(p => (p.toi_sec || 0) >= v);
+    html = sortableTable("skaters", SKATER_COLS, keep, st.sort, p => `data-open-player="${p.id}" data-player-team="${p.team}"`); shown = keep.length; total = rows.length;
+  } else if (slide === "units") {
+    const st = specialState.units; st.minToi[st.view] = v;
+    const q = (st.filter || "").trim().toLowerCase(), all = (leagueUnitsShown && leagueUnitsShown[st.view]) || [];
+    const base = all.filter(u => !q || (u.unit + " " + u.team).toLowerCase().includes(q)), keep = base.filter(u => (u.toi_sec || 0) >= v);
+    html = sortableTable("units", UNIT_COLS, keep, st.sort, u => `data-open-unit="${u.key}" data-unit-team="${u.team}"`); shown = keep.length; total = base.length;
+  } else if (slide.startsWith("team|") && teamUnitsData) {
+    const t = slide.slice(5); specialState.teams.unitMin[t] = v;
+    const res = teamUnitRows(teamUnitsData, t, v); html = res.html; shown = res.shown.length; total = res.all.length;
+  } else return;
+  host.innerHTML = html;
+  wrap.querySelector(".toi-value").textContent = v ? toiStr(v) : "Any";
+  wrap.querySelector(".toi-count").textContent = v ? `Showing ${shown} of ${total}` : `Showing ${total}`;
+});
 document.addEventListener("input", (ev) => {
   const r = ev.target.closest && ev.target.closest("input[data-toi-board]");
   if (!r) return;
@@ -2606,6 +2670,7 @@ document.addEventListener("click", (ev) => {
     renderSpecialPanel("teams").then(() => window.scrollTo(0, keep));
     return;
   }
+  if (t.closest("[data-main-units]")) { specialState.teams.allUnits = false; renderSpecialPanel("teams"); return; }
   const allUnits = t.closest("[data-all-units]");
   if (allUnits) {
     const tab = activeTab === "skaters" || activeTab === "goalies" ? activeTab : "teams";

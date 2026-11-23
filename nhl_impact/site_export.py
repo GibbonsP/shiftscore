@@ -238,7 +238,7 @@ def _player_summary_and_log(conn, player_id, home_by_game, abbrev_by_id=None, un
         f"""SELECT gm.game_date AS date, t.abbrev AS team, pgs.goals, pgs.primary_assists + pgs.secondary_assists AS assists,
                   pgs.primary_assists AS a1, pgs.secondary_assists AS a2,
                   ROUND(pgi.raw_game_score,2) AS raw, ROUND(pgi.qoc,2) AS qoc, ROUND(pgi.qot,2) AS qot,
-                  ROUND(pgi.adjusted_impact,2) AS adjusted, ROUND(pgs.ixg,2) AS ixg, gm.game_id AS gid,
+                  ROUND(pgi.adjusted_impact,2) AS adjusted, ROUND(pgs.ixg,2) AS ixg, pgs.toi_sec AS toi, gm.game_id AS gid,
                   CASE WHEN gm.home_team_id = pgs.team_id THEN gm.away_team_abbrev ELSE gm.home_team_abbrev END AS opp,
                   CASE WHEN gm.home_team_id = pgs.team_id THEN 'vs' ELSE '@' END AS loc
            FROM player_game_impact pgi
