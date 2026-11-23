@@ -56,6 +56,15 @@ def team_situation(code: str | None, is_home: bool) -> int:
         return 4
     away_g, away_s, home_s, home_g = (int(c) for c in code)
     if away_g != 1 or home_g != 1 or not (3 <= away_s <= 5) or not (3 <= home_s <= 5):
+        # a goalie pulled for an extra attacker doesn't end a power play: six skaters against four is still a power play for the team with the extra
+        # man (the NHL scores it that way) and a penalty kill for the other. Take the extra attacker off the count; if that leaves the sides even
+        # (the ordinary 6 on 5 with the goalie out) it stays "other" so empty-net time never lands in the 5v5 numbers.
+        a_eff = away_s - 1 if away_g == 0 and away_s == 6 else away_s
+        h_eff = home_s - 1 if home_g == 0 and home_s == 6 else home_s
+        pulled_ok = (away_g, home_g) in ((0, 1), (1, 0), (0, 0)) and (away_g == 1 or away_s == 6) and (home_g == 1 or home_s == 6)
+        if pulled_ok and 3 <= a_eff <= 5 and 3 <= h_eff <= 5 and a_eff != h_eff:
+            mine, theirs = (h_eff, a_eff) if is_home else (a_eff, h_eff)
+            return 2 if mine > theirs else 3
         return 4
     if away_s == home_s:
         return 0 if away_s == 5 else 1
