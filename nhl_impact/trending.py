@@ -4,7 +4,7 @@ Form is the recent stretch against the same player's (or unit's) earlier games i
   * skaters: average Adjusted Game Score, last 5 games against everything before
   * goalies: goals saved above expected per start, last 4 starts against everything before
   * forward lines and D pairs (listed separately): average Unit Score, last 5 games against everything before
-  * power-play and penalty-kill units: the same, by Unit Score
+  * power-play units and penalty-kill units (listed separately): the same, by Unit Score
 A player or unit has to have enough earlier games for the comparison to mean something and has to be playing now (a game in his team's
 last three), so an injured player's old hot streak doesn't show up. Each list is the five biggest rises and the five biggest falls.
 """
@@ -14,7 +14,10 @@ SKATER_RECENT, SKATER_PRIOR, SKATER_MIN_GP = 5, 8, 12
 GOALIE_RECENT, GOALIE_PRIOR, GOALIE_MIN_SF = 4, 6, 10
 UNIT_RECENT, UNIT_PRIOR = 5, 8
 LINE_PAIR_MIN_AVG_TOI = 300      # seconds per game together: a unit that is only occasionally together isn't a unit
-ST_MIN_TOTAL_TOI = 1200          # twenty minutes in all for a power-play or penalty-kill group
+ST_MIN_TOTAL_TOI = 1200          # twenty minutes in all for a power-play group
+# a penalty-kill group is on the ice about a minute a game and rarely stays together for long, so it is judged over a shorter stretch:
+# the last 4 games against at least 6 earlier ones, with 8 minutes in all
+PK_RECENT, PK_PRIOR, PK_MIN_TOI = 4, 6, 480
 ACTIVE_WITHIN = 3                # his last game must be among his team's last three
 
 
@@ -75,24 +78,25 @@ def build(team_data: dict, units: list, players_index: list) -> dict:
                 pos = (info.get(int(pid)) or {}).get("pos", "")
                 skaters.append(_item({"id": int(pid), "name": p["name"], "team": team, "pos": pos}, *s))
 
-    lines, pairs, special = [], [], []
+    lines, pairs, pp, pk = [], [], [], []
     for u in units:
         log = sorted(u["log"], key=lambda g: g["date"])
         st = u["type"] in ("pp", "pk")
-        if len(log) < UNIT_RECENT + UNIT_PRIOR:
+        n_recent, n_prior = (PK_RECENT, PK_PRIOR) if u["type"] == "pk" else (UNIT_RECENT, UNIT_PRIOR)
+        if len(log) < n_recent + n_prior:
             continue
         toi = sum(g["toi_sec"] for g in log)
-        if st and toi < ST_MIN_TOTAL_TOI:
+        if st and toi < (PK_MIN_TOI if u["type"] == "pk" else ST_MIN_TOTAL_TOI):
             continue
         if not st and toi / len(log) < LINE_PAIR_MIN_AVG_TOI:
             continue
         if u["type"] not in ("line", "pair", "pp", "pk"):
             continue
-        s = _split([g["score"] for g in log], UNIT_RECENT, UNIT_PRIOR)
+        s = _split([g["score"] for g in log], n_recent, n_prior)
         if not s or not active(u["team"], log[-1]["date"]):
             continue
         item = _item({"key": u["key"], "team": u["team"], "type": u["type"], "players": [p["name"] for p in u["players"]]}, *s)
-        (special if st else lines if u["type"] == "line" else pairs).append(item)
+        {"line": lines, "pair": pairs, "pp": pp, "pk": pk}[u["type"]].append(item)
 
-    return {"skaters": _pick(skaters), "goalies": _pick(goalies), "lines": _pick(lines), "pairs": _pick(pairs), "special": _pick(special),
-            "rules": {"skaters": SKATER_RECENT, "goalies": GOALIE_RECENT, "units": UNIT_RECENT}}
+    return {"skaters": _pick(skaters), "goalies": _pick(goalies), "lines": _pick(lines), "pairs": _pick(pairs), "pp": _pick(pp), "pk": _pick(pk),
+            "rules": {"skaters": SKATER_RECENT, "goalies": GOALIE_RECENT, "units": UNIT_RECENT, "pk": PK_RECENT}}
