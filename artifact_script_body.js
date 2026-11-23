@@ -1113,7 +1113,8 @@ function teamDetailHtml(data) {
     overview: () => teamOverviewHtml(data),
     skaters: () => teamSkaterTablesHtml(data),
     goalies: () => `<div class="detail-h3">Goalies</div>${goalies}`,
-    units: () => teamUnitRankHtml(data) + unitSectionsHtml(data.units, data.abbrev, !data.allUnits, !!data.allUnits, ["line", "pair"]),
+    // one table each for forward lines and D pairs holding every unit (sort any column, Unit Score included); the short-lived combinations load with the section
+    units: () => teamUnitRankHtml(data) + unitSectionsHtml(data.units, data.abbrev, false, true, ["line", "pair"]),
     special: () => teamSpecialDangerHtml(data) + (unitSectionsHtml(data.units, data.abbrev, false, !!data.allUnits, ["pp", "pk", "ev4", "ev3"]) || '<div class="empty">No special-teams units yet.</div>'),
     leaders: () => teamPlayerBoardsHtml(data),
     schedule: () => teamGameLogHtml(data),
@@ -2170,7 +2171,7 @@ async function renderSpecialPanel(tabKey) {
     if (tabKey === "teams") {
       let data = await fetchTeam(state.abbrev);
       // a unit outside the main list (or "show every unit") needs the short-lived units too
-      if (state.allUnits || (state.mode === "unit" && !data.units.some(u => u.key === state.unitKey))) data = await withAllUnits(data);
+      if (state.allUnits || (state.mode === "detail" && state.sec === "units") || (state.mode === "unit" && !data.units.some(u => u.key === state.unitKey))) data = await withAllUnits(data);
       html = state.mode === "unit" ? unitDetailHtml(data, state.unitKey) : teamDetailHtml(data);
     } else if (tabKey === "skaters" || tabKey === "goalies") {
       let td = await fetchTeam(state.teamAbbrev);
@@ -3097,3 +3098,69 @@ buildPage();
 routeReady = true;
 syncUrl();
 if (!history.state) { try { history.replaceState({ i: 0, y: 0 }, ""); } catch (e) {} }
+
+// --- Column headings that stay in view. Every table sits in a box that scrolls sideways, and a heading can't stick to the page from inside such a box,
+// so a long table lost its headings as you scrolled down it. This keeps a floating copy of the heading row under the tab bar while the table's own
+// headings are scrolled out of sight: it follows the table's sideways scrolling, keeps pinned columns pinned, and a tap on it sorts like the real one.
+(function stickyHeads() {
+  let box = null, inner = null, shown = null, queued = false;
+  const ensure = () => {
+    if (box) return;
+    box = document.createElement("div"); box.className = "float-head"; box.hidden = true;
+    inner = document.createElement("div"); inner.className = "float-head-in"; box.appendChild(inner);
+    document.body.appendChild(box);
+    box.addEventListener("click", (ev) => {
+      const th = ev.target.closest("th"); if (!th || !shown) return;
+      const i = [...th.parentElement.children].indexOf(th), r = [...inner.querySelectorAll("tr")].indexOf(th.parentElement);
+      const real = shown.table.tHead && shown.table.tHead.rows[r] && shown.table.tHead.rows[r].cells[i];
+      if (real) real.click();
+    });
+  };
+  const hide = () => { if (box && !box.hidden) { box.hidden = true; inner.innerHTML = ""; } shown = null; };
+  function update() {
+    queued = false;
+    const panel = document.querySelector(".panel.active, [role=tabpanel].active");
+    if (!panel) return hide();
+    const nav = document.querySelector("nav.tabs"), top = nav ? nav.getBoundingClientRect().bottom + 6 : 0;
+    let pick = null;
+    for (const sc of panel.querySelectorAll(".table-scroll")) {
+      const table = sc.querySelector("table"); if (!table || !table.tHead || table.rows.length < 12) continue;
+      if (sc.scrollHeight > sc.clientHeight + 2 && getComputedStyle(sc).overflowY !== "visible") continue;   // a table that scrolls inside its own box keeps its own headings
+      const hr = table.tHead.getBoundingClientRect(), tr = table.getBoundingClientRect();
+      if (hr.bottom < top && tr.bottom > top + hr.height + 8) { pick = { sc, table, hr }; break; }
+    }
+    if (!pick) return hide();
+    ensure();
+    const { sc, table } = pick, scr = sc.getBoundingClientRect(), left = sc.scrollLeft;
+    if (!shown || shown.table !== table) {
+      inner.innerHTML = "";
+      const t = document.createElement("table"); t.className = table.className; t.style.width = table.offsetWidth + "px"; t.style.tableLayout = "fixed";
+      const cg = document.createElement("colgroup");
+      [...table.tHead.rows[table.tHead.rows.length - 1].cells].forEach(c => { const col = document.createElement("col"); col.style.width = c.offsetWidth + "px"; cg.appendChild(col); });
+      t.appendChild(cg);
+      const head = table.tHead.cloneNode(true);
+      // the real heading cells decide the widths (a heading can span several columns), so copy each one's measured width onto its copy
+      [...table.tHead.rows].forEach((row, ri) => [...row.cells].forEach((c, ci) => { const m = head.rows[ri].cells[ci]; m.style.width = m.style.minWidth = c.offsetWidth + "px"; m.style.boxSizing = "border-box"; }));
+      t.appendChild(head); inner.appendChild(t);
+      inner.className = "float-head-in " + sc.className;
+      shown = { table, sc };
+    }
+    box.style.left = scr.left + "px"; box.style.width = scr.width + "px"; box.style.top = top + "px"; box.hidden = false;
+    inner.style.transform = `translateX(${-left}px)`;
+    // columns pinned in the real table (the first column) stay pinned here too
+    const real = table.tHead.rows, copy = inner.querySelectorAll("thead tr");
+    [...real].forEach((row, ri) => [...row.cells].forEach((c, ci) => {
+      const cs = getComputedStyle(c), m = copy[ri].cells[ci];
+      if (cs.position === "sticky" && cs.left !== "auto") {
+        const pin = parseFloat(cs.left) || 0, natural = m.offsetLeft;
+        m.style.position = "relative"; m.style.left = Math.max(0, left + pin - natural) + "px"; m.style.zIndex = 3;
+      }
+    }));
+  }
+  const queue = () => { if (!queued) { queued = true; requestAnimationFrame(update); } };
+  window.addEventListener("scroll", queue, { passive: true });
+  window.addEventListener("resize", () => { shown = null; queue(); });
+  document.addEventListener("scroll", (ev) => { if (ev.target && ev.target.classList && ev.target.classList.contains("table-scroll")) queue(); }, true);
+  let t = null;
+  try { new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { shown = null; queue(); }, 120); }).observe(document.getElementById("panels"), { childList: true, subtree: true }); } catch (e) {}
+})();
