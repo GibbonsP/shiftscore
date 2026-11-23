@@ -29,14 +29,25 @@ GAME_UNIT_MIN_TOI = {"line": 60, "pair": 60, "pp": 0, "pk": 0, "ev4": 0, "ev3": 
 
 
 def _strength_label(situation_code, scoring_is_home: bool) -> str:
-    """EV / PP / SH / EN for the team that scored, from the situationCode at the goal."""
+    """EV / PP / SH / EN for the team that scored, from the situationCode at the goal.
+
+    A goalie pulled for an extra attacker doesn't change who is on a power play: the extra skater is taken off each side's count first, so
+    6 skaters (goalie out) against 4 is still a power play (the NHL scores it that way), and 6 against 5 is even strength."""
     if not situation_code or len(situation_code) != 4 or not situation_code.isdigit():
         return "EV"
-    away_goalie, _a, _h, home_goalie = (int(c) for c in situation_code)
+    away_goalie, away_sk, home_sk, home_goalie = (int(c) for c in situation_code)
     defending_goalie = away_goalie if scoring_is_home else home_goalie
-    away_state, home_state = team_states(situation_code)
-    state = home_state if scoring_is_home else away_state
-    label = "PP" if state == "pp" else "SH" if state == "pk" else "EV"
+    if away_goalie == 1 and home_goalie == 1:
+        away_state, home_state = team_states(situation_code)
+        state = home_state if scoring_is_home else away_state
+        label = "PP" if state == "pp" else "SH" if state == "pk" else "EV"
+    else:
+        # only the usual extra attacker (six skaters with the goalie out) is taken off; odd counts (five skaters and no goalie) stay even strength
+        away_eff = away_sk - 1 if away_goalie == 0 and away_sk == 6 else away_sk
+        home_eff = home_sk - 1 if home_goalie == 0 and home_sk == 6 else home_sk
+        mine, theirs = (home_eff, away_eff) if scoring_is_home else (away_eff, home_eff)
+        odd = (away_goalie == 0 and away_sk != 6) or (home_goalie == 0 and home_sk != 6)
+        label = "EV" if odd or mine == theirs or not (3 <= min(mine, theirs) and max(mine, theirs) <= 5) else "PP" if mine > theirs else "SH"
     if defending_goalie == 0:
         label += " EN"
     return label
