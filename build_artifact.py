@@ -31,7 +31,7 @@ parser.add_argument("--seasons", nargs="+", help="rebuild only these seasons and
                     "(what the automatic updater uses; writes artifact_data/changed.json listing the files that changed)")
 args = parser.parse_args()
 PAGE_DATA = "artifact_data/page_data.json"
-LIGHT_KEYS = {"meta", "players_index", "games_index", "teams_index", "goalies"}   # what stays inline in the page (everything else is a board)
+LIGHT_KEYS = {"meta", "players_index", "games_index", "teams_index", "goalies", "trending"}   # what stays inline in the page (everything else is a board)
 
 
 def assemble(data):

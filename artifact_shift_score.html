@@ -939,6 +939,13 @@ tbody tr:nth-child(even) .faces .avatar { border-color: color-mix(in srgb, var(-
 .lead-team { color: var(--muted); font-size: 14px; }
 .lead-val { text-align: right; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .lead-val small { display: block; color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.trend-h { margin-top: 22px; }
+.trend-dir { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px 4px; }
+.trend-dir.up { color: var(--good); }
+.trend-dir.down { color: var(--bad, #c0392b); }
+.lead .faces { display: flex; flex: none; }
+.lead .faces .avatar { width: 30px; height: 30px; margin-left: -6px; }
+.lead .faces .avatar:first-child { margin-left: 0; }
 @media (max-width: 480px) { .res-grid { grid-template-columns: 1fr; } }
 /* team game log */
 .glog { min-width: 1850px; }

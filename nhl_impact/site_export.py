@@ -1007,8 +1007,10 @@ def build_season(conn, pipeline) -> dict:
             shard["players"][str(pid)]["danger"] = danger
     attach_game_logs(team_data, games)
     attach_player_cards(team_data)
+    from . import trending
     return {
-        "inline": dict(board, teams_index=teams_index, players_index=players_index, games_index=games_index),
+        "inline": dict(board, teams_index=teams_index, players_index=players_index, games_index=games_index,
+                       trending=trending.build(team_data, units, players_index)),
         "team_shards": team_data, "game_shards": game_data, "unit_shards": unit_data,
         "league_units": league_units(units, max((t["gp"] for t in teams_index), default=0)),
     }
