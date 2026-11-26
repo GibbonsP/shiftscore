@@ -96,6 +96,25 @@ def ingest_game(conn, game_id: int, require_complete: bool = False) -> None:
             if age < 6 * 3600:
                 conn.rollback()
                 raise ValueError(f"no shift chart for game {game_id} yet")
+    if require_complete and shift_rows_raw:
+        # the NHL posts a shift chart in pieces: a chart that has started but isn't whole makes ice time and every unit look short (one pair showed
+        # 15:43 against its real 17:35). A whole regulation chart has every skater's shifts adding up to nearly six players for 60 minutes per team,
+        # so a chart well under that, or one that stops before the third period ends, is refused and tried again on the next run.
+        started = pbp.get("startTimeUTC")
+        if started:
+            from datetime import datetime, timezone
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(started.replace("Z", "+00:00"))).total_seconds()
+            if age < 6 * 3600:
+                per_team: dict = defaultdict(int)
+                last_end = 0
+                for r in shift_rows_raw:
+                    if r["period"] <= 3:
+                        per_team[r["teamId"]] += max(0, mmss_to_sec(r["endTime"]) - mmss_to_sec(r["startTime"]))
+                        if r["period"] == 3:
+                            last_end = max(last_end, mmss_to_sec(r["endTime"]))
+                if len(per_team) < 2 or min(per_team.values()) < 0.92 * 6 * 3600 or last_end < 1190:
+                    conn.rollback()
+                    raise ValueError(f"shift chart for game {game_id} is not complete yet")
     shift_rows = []
     for s in shift_rows_raw:
         start_sec = mmss_to_sec(s["startTime"])

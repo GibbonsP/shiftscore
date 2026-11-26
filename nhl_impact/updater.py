@@ -28,6 +28,7 @@ from .live import load_score_factors
 
 SETTLE_SEC = int(2.5 * 3600)   # earliest a game is looked at: most end 2.4-3.2 hours after the puck drops, and a game is only taken once the NHL calls it final AND has posted its shift chart (ingest refuses a young game without shifts, so it is simply tried again on the next run, every 10 minutes)
 REFRESH_SEC = 24 * 3600
+RECHECK_AFTER_SEC = 3600   # a game taken young is processed once more an hour or more later, in case its shift chart was still being posted
 NO_SHIFTS_RETRY_SEC = 60 * 24 * 3600   # keep asking for a missing shift chart for two months (it can be posted late, and the watcher may have been off)
 NO_SHIFTS_RETRY_EVERY = 3 * 3600       # but no more than once every three hours per game
 STATE_FILE = "update_state.json"
@@ -57,7 +58,7 @@ def _season_of(game_id: int) -> str:
 
 def due_games(conn, state: dict, now: datetime) -> list[tuple[int, str]]:
     """[(game_id, kind)] for finished regular-season games that need (re)ingesting. kind is 'new' (not in the database),
-    'retry' (in, but the shift chart was empty) or 'final' (the one-time pass 24 hours after the game ended)."""
+    'retry' (in, but the shift chart was empty), 'recheck' (one more pass an hour after a young game was taken) or 'final' (the one-time pass 24 hours after the game ended)."""
     newest = conn.execute("SELECT MAX(game_date) FROM games").fetchone()[0]
     start = (datetime.strptime(newest, "%Y-%m-%d") - timedelta(days=1)).date() if newest else (now - timedelta(days=3)).date()
     have = {r[0] for r in conn.execute("SELECT DISTINCT game_id FROM player_game_stats")}
@@ -84,6 +85,8 @@ def due_games(conn, state: dict, now: datetime) -> list[tuple[int, str]]:
                 out.append((gid, "retry"))
             elif age >= REFRESH_SEC and not info.get("refreshed"):
                 out.append((gid, "final"))
+            elif age < REFRESH_SEC and info.get("ingested") and not info.get("rechecked") and now.timestamp() - info["ingested"] >= RECHECK_AFTER_SEC:
+                out.append((gid, "recheck"))
         day += timedelta(days=1)
         time.sleep(0.2)
     # games already in the database whose shift chart never arrived: the scan above only looks at recent days, so ask for
@@ -139,6 +142,8 @@ def run(db_path: str = "nhl_impact.db", python: str | None = None) -> dict | Non
             info["ingested"] = time.time()
             if kind == "final":
                 info["refreshed"] = True
+            if kind in ("final", "recheck"):
+                info["rechecked"] = True
             done.append(gid)
         except Exception as e:  # one broken game must not stop the rest
             failed.append((gid, f"{type(e).__name__}: {e}"))
