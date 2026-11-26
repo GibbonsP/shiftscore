@@ -133,7 +133,7 @@ def run(db_path: str = "nhl_impact.db", python: str | None = None) -> dict | Non
 
     pipeline = xg_model.load("models/xg_model.joblib")
     factors = load_score_factors()
-    done, failed = [], []
+    done, failed, waiting = [], [], []
     players_before = {r[0] for r in conn.execute("SELECT player_id FROM players")}
     for gid, kind in todo:
         try:
@@ -145,13 +145,18 @@ def run(db_path: str = "nhl_impact.db", python: str | None = None) -> dict | Non
             if kind in ("final", "recheck"):
                 info["rechecked"] = True
             done.append(gid)
+        except ingest.NotReady as e:   # the NHL is still posting this game: wait for the next run, it isn't a failure
+            waiting.append((gid, str(e)))
         except Exception as e:  # one broken game must not stop the rest
             failed.append((gid, f"{type(e).__name__}: {e}"))
         time.sleep(0.3)
     if not done:
         conn.close()
         _save_state(state)
-        return {"event": "update_failed", "failed": failed}
+        if waiting:
+            print(f"waiting on the NHL for {len(waiting)} game(s): {waiting}", flush=True)
+        # games still being posted are only waiting; only a real error makes the run fail
+        return {"event": "update_failed", "failed": failed} if failed else None
 
     new_players = {r[0] for r in conn.execute("SELECT player_id FROM players")} - players_before
     seasons = sorted({r[0] for r in conn.execute(f"SELECT DISTINCT season FROM games WHERE game_id IN ({','.join(map(str, done))})")})

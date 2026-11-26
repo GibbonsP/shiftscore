@@ -42,12 +42,16 @@ def retally_goals_shots(conn, game_id: int) -> None:
     conn.commit()
 
 
+class NotReady(ValueError):
+    """The NHL hasn't finished posting this game yet (play-by-play or shift chart). Not an error: the game is tried again on the next run."""
+
+
 def ingest_game(conn, game_id: int, require_complete: bool = False) -> None:
     pbp = api.get_play_by_play(game_id)
     if require_complete and not any(p.get("typeDescKey") == "game-end" for p in pbp.get("plays", [])):
         # the NHL sometimes serves a finished game's play-by-play before it is complete (a game stored that way shows 0-0 with no goals);
         # refuse before touching the database so the game stays "new" and is fetched again on the next pass
-        raise ValueError(f"play-by-play for game {game_id} is not complete yet (no game-end event)")
+        raise NotReady(f"play-by-play for game {game_id} is not complete yet (no game-end event)")
     # delete-before-insert makes re-running the backfill on an already-ingested
     # game safe instead of duplicating shift/event rows
     conn.execute("DELETE FROM shifts WHERE game_id = ?", (game_id,))
@@ -95,7 +99,7 @@ def ingest_game(conn, game_id: int, require_complete: bool = False) -> None:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(started.replace("Z", "+00:00"))).total_seconds()
             if age < 6 * 3600:
                 conn.rollback()
-                raise ValueError(f"no shift chart for game {game_id} yet")
+                raise NotReady(f"no shift chart for game {game_id} yet")
     if require_complete and shift_rows_raw:
         # the NHL posts a shift chart in pieces: a chart that has started but isn't whole makes ice time and every unit look short (one pair showed
         # 15:43 against its real 17:35). A whole regulation chart has every skater's shifts adding up to nearly six players for 60 minutes per team,
@@ -114,7 +118,7 @@ def ingest_game(conn, game_id: int, require_complete: bool = False) -> None:
                             last_end = max(last_end, mmss_to_sec(r["endTime"]))
                 if len(per_team) < 2 or min(per_team.values()) < 0.92 * 6 * 3600 or last_end < 1190:
                     conn.rollback()
-                    raise ValueError(f"shift chart for game {game_id} is not complete yet")
+                    raise NotReady(f"shift chart for game {game_id} is not complete yet")
     shift_rows = []
     for s in shift_rows_raw:
         start_sec = mmss_to_sec(s["startTime"])
