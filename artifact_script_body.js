@@ -795,54 +795,37 @@ function powerHtml(state) {
 }
 
 
-// --- Results vs. chances: for every team, its record against what its chances say the record should be, in three groups by record (bad, middle,
-// good), so you can see who is really bad or good and who is just unlucky or riding results. The "chances" line is points share predicted from
-// expected-goals share (xGF%), fitted on the completed seasons; the gap is the part of a record that isn't explained by how the team has played.
-function realityFit() {
-  const pts = [];
-  DATA.seasons.filter(x => !x.in_progress).forEach(sx => ((DATA.by_season[sx.id] || {}).teams_index || []).forEach(t => { if (t.gp && t.xgf_pct !== null && t.xgf_pct !== undefined) pts.push([t.xgf_pct - 50, t.pts / (2 * t.gp)]); }));
-  if (pts.length < 20) return { a: 0.557, b: 0.018, sd: 0.058 };       // the fit from 2024-25 and 2025-26, if there aren't enough completed seasons loaded
-  const n = pts.length, mx = pts.reduce((a, p) => a + p[0], 0) / n, my = pts.reduce((a, p) => a + p[1], 0) / n;
-  const b = pts.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0) / pts.reduce((a, p) => a + (p[0] - mx) ** 2, 0), a = my - b * mx;
-  const sd = Math.sqrt(pts.reduce((acc, p) => acc + (p[1] - (a + b * p[0])) ** 2, 0) / n);
-  return { a, b, sd };
-}
+// --- Results vs. chances: a three by three grid. Down the side is how a team has been playing (its 5v5 expected-goals share), across the top what it has
+// been getting for it (points percentage). The corners that don't fit together, playing well but losing or getting outplayed but winning, are where
+// records tend to drift back toward the middle; the rest of the grid says the record is about what the play deserves. Under each logo is the team's power rank.
+const REALITY = { playWell: 52.5, outplayed: 47.5, winning: 0.6, losing: 0.45 };   // the cutoffs between the three rows and the three columns
+const REALITY_CELLS = [
+  [["Better than the record", "Playing well and losing: the wins should come", "mismatch"], ["Should be higher", "Playing well, only treading water", "soft"], ["Earned it", "Playing well and winning", "match-good"]],
+  [["Short on bounces", "Even play, a losing record", "soft"], ["Middle of the pack", "Even play, an even record", ""], ["Making it count", "Even play, winning", "soft"]],
+  [["Struggling", "Outplayed and losing", "match-bad"], ["Hanging in", "Outplayed, treading water", "soft"], ["Riding the results", "Outplayed but winning: the record may slip", "mismatch"]],
+];
 function realityHtml(teams, q) {
-  const fit = realityFit(), clear = 0.06;                                  // a gap of 6 points of points share (about 10 points over a season) is more than the usual miss
-  const rows = teams.filter(t => t.gp && t.xgf_pct !== null && t.xgf_pct !== undefined).map(t => {
-    const act = t.pts / (2 * t.gp), exp = fit.a + fit.b * (t.xgf_pct - 50);
-    return Object.assign({}, t, { act, exp, gap: act - exp });
-  }).sort((a, b) => b.act - a.act);
+  const rows = teams.filter(t => t.gp && t.xgf_pct5 !== null && t.xgf_pct5 !== undefined);
   if (!rows.length) return '<div class="empty">Not enough games played yet this season.</div>';
-  const n = rows.length, nGood = Math.round(n * 0.31), nBad = Math.round(n * 0.31);
-  const tiers = [["good", "Good teams", "Are they really that good, or are the results flattering them?", rows.slice(0, nGood)],
-    ["mid", "Middle teams", "Is the middle where they belong, or are they better or worse than the standings show?", rows.slice(nGood, n - nBad)],
-    ["bad", "Bad teams", "Are they really that bad, or are they unlucky?", rows.slice(n - nBad)]];
-  const lo = 0.2, hi = 0.85, pos = (v) => Math.max(0, Math.min(100, 100 * (v - lo) / (hi - lo)));
-  const avg = rows.reduce((a, t) => a + t.act, 0) / n;
-  const verdict = (tier, g) => {
-    if (g >= clear) return tier === "bad" ? ["Record flatters them", "even worse than the record", "up"] : ["Riding results", "the chances don't back the record", "up"];
-    if (g <= -clear) return tier === "good" ? ["Better than the record", "the chances are even stronger", "down"] : ["Unlucky", "playing better than the record", "down"];
-    return tier === "good" ? ["Really good", "results match the chances", ""] : tier === "bad" ? ["Really bad", "results match the chances", ""] : ["About right", "results match the chances", ""];
+  const grid = [[[], [], []], [[], [], []], [[], [], []]];
+  for (const t of rows) {
+    const act = t.pts / (2 * t.gp), r = t.xgf_pct5 >= REALITY.playWell ? 0 : t.xgf_pct5 < REALITY.outplayed ? 2 : 1, c = act >= REALITY.winning ? 2 : act < REALITY.losing ? 0 : 1;
+    grid[r][c].push(Object.assign({}, t, { act }));
+  }
+  const n = (S().teams_index || []).length, ord = ordinal;
+  const logo = (t) => {
+    const on = !q || (t.abbrev + " " + teamName(t.abbrev)).toLowerCase().includes(q), tier = t._pr <= 10 ? " top" : t._pr > n - 10 ? " low" : "";
+    return `<button type="button" class="rv-team${on ? "" : " dim"}" data-open-team="${t.abbrev}" title="${escapeHtml(teamName(t.abbrev))}: ${t.w}&ndash;${t.l}&ndash;${t.otl}, ${(100 * t.act).toFixed(0)}% of points, ${t.xgf_pct5.toFixed(1)}% of the 5v5 expected goals">
+      ${logoSpan(t.abbrev)}<small class="${tier.trim()}">${t.abbrev}<br>power ${ord(t._pr)}</small></button>`;
   };
-  const ticks = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8].map(v => `<span style="left:${pos(v)}%">${Math.round(100 * v)}%</span>`).join("");
-  const sign = (v, d = 1) => (v > 0 ? "+" : "") + v.toFixed(d);
-  const section = ([key, title, ask, list]) => {
-    const shown = list.filter(t => !q || (t.abbrev + " " + teamName(t.abbrev)).toLowerCase().includes(q));
-    return `<div class="rv-section rv-${key}"><div class="detail-h3">${title} <span class="detail-sub">${ask}</span></div>
-      <div class="rv-axis"><span class="rv-axis-l"></span><div class="rv-ticks">${ticks}</div><span class="rv-axis-r"></span></div>
-      ${shown.map(t => { const [label, why, dir] = verdict(key, t.gap), fin = t.gf - t.xgf, goalie = t.xga - t.ga;
-        return `<div class="rv-row" data-open-team="${t.abbrev}" role="button" tabindex="0">
-          <div class="rv-team">${logoSpan(t.abbrev)}<span><strong>${escapeHtml(teamName(t.abbrev))}</strong><small>${t.w}&ndash;${t.l}&ndash;${t.otl} &middot; ${Math.round(100 * t.act)}% of points</small></span></div>
-          <div class="rv-track" title="Record ${(100 * t.act).toFixed(0)}% of points; its chances say ${(100 * t.exp).toFixed(0)}%">
-            <i class="rv-avg" style="left:${pos(avg)}%"></i>
-            <i class="rv-link ${dir}" style="left:${Math.min(pos(t.act), pos(t.exp))}%;width:${Math.abs(pos(t.act) - pos(t.exp))}%"></i>
-            <i class="rv-ring" style="left:${pos(t.exp)}%"></i><i class="rv-dot ${dir}" style="left:${pos(t.act)}%"></i></div>
-          <div class="rv-verdict ${dir}"><b>${label}</b><small>${sign(100 * t.gap, 0)} pts of share &middot; scoring ${sign(fin)} goals, goaltending ${sign(goalie)}</small></div></div>`; }).join("") || '<div class="empty">No teams match.</div>'}</div>`;
-  };
-  const legend = `<div class="rv-legend"><span><i class="rv-dot"></i> Actual record (share of possible points)</span><span><i class="rv-ring"></i> What its chances say the record should be</span><span><i class="rv-avg"></i> League average</span></div>`;
-  const note = `<div class="panel-caption"><strong>How to read it.</strong> The ring is the share of points a team would typically have given its expected-goals share so far (fitted on the last completed seasons: chances explain about half of the spread in standings, and a record usually misses by about ${Math.round(100 * fit.sd)} points of share, roughly ${Math.round(164 * fit.sd)} standings points over a season). The dot is where the record actually is. Dot to the right of the ring means results are ahead of the chances; to the left means the team has played better than its record. The small print is what is driving the gap: goals scored above or below what the shots were worth, and goals allowed against what the shots against were worth (a hot or cold goalie). Early in the season a few games can swing all of this, so give a gap more weight the more games have been played.</div>`;
-  return `${legend}${tiers.map(section).join("")}${note}`;
+  const colHead = [["Losing", "under .450"], ["Treading water", "in between"], ["Winning", ".600 and up"]];
+  const rowHead = [["Playing well", "5v5 xG share 52.5%+"], ["Even", "in between"], ["Getting outplayed", "under 47.5%"]];
+  const body = grid.map((row, ri) => `<div class="rv-rowhead"><strong>${rowHead[ri][0]}</strong><small>${rowHead[ri][1]}</small></div>`
+    + row.map((list, ci) => { const [title, sub, kind] = REALITY_CELLS[ri][ci];
+      return `<div class="rv-cell ${kind}"><div class="rv-cell-h">${title}<small>${sub}</small></div>
+        <div class="rv-logos">${list.sort((x, y) => x._pr - y._pr).map(logo).join("") || '<span class="rv-none">No teams</span>'}</div></div>`; }).join("")).join("");
+  return `<div class="rv-matrix"><div class="rv-corner">Results (points %) &rarr;</div>${colHead.map(([a, b]) => `<div class="rv-colhead"><strong>${a}</strong><small>${b}</small></div>`).join("")}${body}</div>
+    <div class="panel-caption"><strong>How to read it.</strong> Down the side is how a team has played at 5v5, measured by its share of the expected goals; across the top is what that has earned in the standings, its points percentage. A team in the top left is playing better than its record shows and is likely owed some wins; one in the bottom right is winning more than its play backs up and usually drifts back. Teams in the other cells are about where their play says they should be. The number under each logo is the team's power rank, green for the top ten and red for the bottom ten. Early in the season a few games can move a team across a line, so give the grid more weight the more games have been played. Click a team to open it.</div>`;
 }
 // --- Playoff Odds: the rest of the regular season simulated 10,000 times (nhl_impact/playoff_odds.py, built into data/{season}/odds.json on every
 // update): each team's chance to make the playoffs, win its division and finish first overall, with its projected points.
