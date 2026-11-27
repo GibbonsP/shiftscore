@@ -815,17 +815,20 @@ function realityHtml(teams, q) {
   const n = (S().teams_index || []).length, ord = ordinal;
   const logo = (t) => {
     const on = !q || (t.abbrev + " " + teamName(t.abbrev)).toLowerCase().includes(q), tier = t._pr <= 10 ? " top" : t._pr > n - 10 ? " low" : "";
-    return `<button type="button" class="rv-team${on ? "" : " dim"}" data-open-team="${t.abbrev}" title="${escapeHtml(teamName(t.abbrev))}: ${t.w}&ndash;${t.l}&ndash;${t.otl}, ${(100 * t.act).toFixed(0)}% of points, ${t.xgf_pct5.toFixed(1)}% of the 5v5 expected goals">
-      ${logoSpan(t.abbrev)}<small class="${tier.trim()}">${t.abbrev}<br>power ${ord(t._pr)}</small></button>`;
+    return `<button type="button" class="rv-chip${on ? "" : " dim"}" data-open-team="${t.abbrev}" title="${escapeHtml(teamName(t.abbrev))}: ${t.w}&ndash;${t.l}&ndash;${t.otl}, ${(100 * t.act).toFixed(0)}% of points, ${t.xgf_pct5.toFixed(1)}% of the 5v5 expected goals, power rank ${t._pr}">
+      ${logoSpan(t.abbrev)}<b>${t.abbrev}</b><i class="${tier.trim()}">${t._pr}</i></button>`;
   };
-  const colHead = [["Losing", "under .450"], ["Treading water", "in between"], ["Winning", ".600 and up"]];
-  const rowHead = [["Playing well", "5v5 xG share 52.5%+"], ["Even", "in between"], ["Getting outplayed", "under 47.5%"]];
+  const colHead = [["Losing", "under .450 points %"], ["Treading water", "in between"], ["Winning", ".600 points % and up"]];
+  const rowHead = [["Playing well", "5v5 xG share 52.5%+"], ["Even", "in between"], ["Outplayed", "under 47.5%"]];
+  // gap: how far the play is above (+) or below (-) what the record shows; the cells along the diagonal are where the two agree
   const body = grid.map((row, ri) => `<div class="rv-rowhead"><strong>${rowHead[ri][0]}</strong><small>${rowHead[ri][1]}</small></div>`
-    + row.map((list, ci) => { const [title, sub, kind] = REALITY_CELLS[ri][ci];
-      return `<div class="rv-cell ${kind}"><div class="rv-cell-h">${title}<small>${sub}</small></div>
-        <div class="rv-logos">${list.sort((x, y) => x._pr - y._pr).map(logo).join("") || '<span class="rv-none">No teams</span>'}</div></div>`; }).join("")).join("");
-  return `<div class="rv-matrix"><div class="rv-corner">Results (points %) &rarr;</div>${colHead.map(([a, b]) => `<div class="rv-colhead"><strong>${a}</strong><small>${b}</small></div>`).join("")}${body}</div>
-    <div class="panel-caption"><strong>How to read it.</strong> Down the side is how a team has played at 5v5, measured by its share of the expected goals; across the top is what that has earned in the standings, its points percentage. A team in the top left is playing better than its record shows and is likely owed some wins; one in the bottom right is winning more than its play backs up and usually drifts back. Teams in the other cells are about where their play says they should be. The number under each logo is the team's power rank, green for the top ten and red for the bottom ten. Early in the season a few games can move a team across a line, so give the grid more weight the more games have been played. Click a team to open it.</div>`;
+    + row.map((list, ci) => { const [title, sub] = REALITY_CELLS[ri][ci], gap = (2 - ri) - ci, arrow = gap > 0 ? "&uarr;" : gap < 0 ? "&darr;" : "";
+      return `<div class="rv-cell" data-gap="${gap}"><div class="rv-cell-top"><span class="rv-count">${list.length}</span><span class="rv-cell-h">${arrow ? `<em>${arrow}</em>` : ""}${title}<small>${sub}</small></span></div>
+        <div class="rv-logos">${list.sort((x, y) => x._pr - y._pr).map(logo).join("")}</div></div>`; }).join("")).join("");
+  return `<div class="rv-wrap"><div class="rv-axis-top"><span>Record: points earned &rarr;</span></div>
+    <div class="rv-matrix"><div class="rv-corner"></div>${colHead.map(([a, b]) => `<div class="rv-colhead"><strong>${a}</strong><small>${b}</small></div>`).join("")}${body}</div>
+    <div class="rv-legend"><span class="up">&uarr; record should rise</span><span class="mid">play and record agree</span><span class="down">record may fall &darr;</span><span class="key"><i>12</i> power rank</span></div></div>
+    <div class="panel-caption"><strong>How to read it.</strong> Down the side is how a team has played at 5v5, measured by its share of the expected goals; across the top is what that has earned in the standings, its points percentage. Teams along the diagonal have about the record their play deserves; the further a team sits from it, the more likely its record is to move toward its play. The small number on each team is its power rank, green for the top ten and red for the bottom ten. Cells tinted teal sit above the diagonal where the play is better than the record; cells tinted coral are winning more than the play backs up. Early in the season a few games can move a team across a line, so give the grid more weight the more games have been played. Click a team to open it.</div>`;
 }
 // --- Playoff Odds: the rest of the regular season simulated 10,000 times (nhl_impact/playoff_odds.py, built into data/{season}/odds.json on every
 // update): each team's chance to make the playoffs, win its division and finish first overall, with its projected points.
